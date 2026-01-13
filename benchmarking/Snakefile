@@ -8,7 +8,7 @@ ref_dir = config["ref_dir"]
 aligner = config['aligner']
 approx_sequenced_coverage = config['approx_sequenced_coverage']
 haplomaker_jar = config['haplomaker_jar']
-pb_cpg_model = config['pb_cpg_model']
+aligned_bam_to_cpg_scores_path = config['aligned_bam_to_cpg_scores_path']
 reference_genome_url = config['reference_genome_url']
 par_regions_bed_url = config['par_regions_bed_url']
 gt_variants_url = config['gt_variants_url']
@@ -395,11 +395,11 @@ rule get_snvs_indels:
 rule call_methylations:
     input:
         bam=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.bam",
-        cpg=pb_cpg_model
     output:
         base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed"
     params:
-        prefix=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation"
+        prefix=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation",
+        exec=aligned_bam_to_cpg_scores_path
     threads: 32
     resources:
         runtime=120,
@@ -407,8 +407,7 @@ rule call_methylations:
     wildcard_constraints:
         aligner=aligner
     shell:
-        "aligned_bam_to_cpg_scores --bam {input.bam} --output-prefix {params.prefix} --model {input.cpg} "
-        "--threads {threads}"
+        "{params.exec} --bam {input.bam} --output-prefix {params.prefix} --threads {threads}"
 
 
 def get_longhap_options(wildcards):

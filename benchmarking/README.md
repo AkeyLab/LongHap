@@ -9,6 +9,8 @@ We retrieved the sequencing data from the following sources:
 
 The workflow will download the T2T reference genome (hs1) and the HG002 T2T-Q100 benchmark variant calls for HG002.
 
+You will have to download pb-CpG-tools and provide the path to the `aligned_bam_to_cpg_scores` executable in the `config/config.yaml`
+
 To run the workflow, simply execute:
 ```commandline
 snakemake --profile profiles/ --use-conda

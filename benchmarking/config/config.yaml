@@ -11,4 +11,4 @@ par_regions_bed_url: https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CH
 
 gt_variants_url: https://github.com/marbl/HG002-issues/blob/main/patches/already_applied/hg002v1.0.1_to_hg002v1.1.vcf.gz
 
-pb_cpg_model: /Genomics/argo/users/ap7577/pb-CpG-tools-v2.3.2-x86_64-unknown-linux-gnu/models/pileup_calling_model.v1.tflite
+aligned_bam_to_cpg_scores_path: /home/ap7577/LongHap/pb-CpG-tools-v3.0.0-x86_64-unknown-linux-gnu/bin/aligned_bam_to_cpg_scores
