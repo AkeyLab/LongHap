@@ -61,7 +61,7 @@ rule unzip_reference_fasta:
     input:
         ref=ref_dir + reference_genome_url.split('/')[-1]
     output:
-        unzip=reference_genome_url.split('/')[-1].replace('.fa.gz', ".fa")
+        unzip=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".fa")
     localrule: True
     shell:
         "gunzip -c {input.ref} > {output.unzip}; "
