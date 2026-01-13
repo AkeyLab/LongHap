@@ -448,7 +448,7 @@ rule run_longhap_meth_phase:
         mem_mb=32 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth.benchmark"
     shell:
-        "../LongHap.py read_phasing --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_variant_read_mapping {output.variant_read_mapping} --output_allele_coverage {output.allele_coverage} "
         "--output_unphaseable_variants {output.unphaseable_variants} --output_read_states {output.read_states} "
@@ -486,7 +486,7 @@ rule run_longhap_meth_phase_indels:
         mem_mb=32 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth.benchmark"
     shell:
-        "../LongHap.py read_phasing --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_variant_read_mapping {output.variant_read_mapping} "
         "--output_unphaseable_variants {output.unphaseable_variants} "
@@ -522,7 +522,7 @@ rule run_longhap_phase:
         mem_mb=32 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap.benchmark"
     shell:
-        "../LongHap.py read_phasing --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_read_states {output.read_states} "
         "--output_variant_read_mapping {output.variant_read_mapping} --output_allele_coverage {output.allele_coverage} "
@@ -556,7 +556,7 @@ rule run_longhap_phase_indels:
         mem_mb=32 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap.benchmark"
     shell:
-        "../LongHap.py read_phasing --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_read_states {output.read_states} --output_allele_coverage {output.allele_coverage} " 
         "--output_variant_read_mapping {output.variant_read_mapping} "
