@@ -106,18 +106,18 @@ rule download_gt_variants:
         "wget -q -P {params.output_dir} {params.url}"
 
 def get_barcoded_pb_bam_file(wildcards):
-    barcoded_bam = glob.glob(f'{data_dir}{wildcards.sample}/hifi_reads/*[!unassigned].bam')
+    barcoded_bam = glob.glob(f'{data_dir}HG002/hifi_reads/*[!unassigned].bam')
     if len(barcoded_bam) > 1:
         raise ValueError(f"Expected only one barcoded bam file, but found {len(barcoded_bam)}:\n{'\n'.join(barcoded_bam)}")
     else:
         return barcoded_bam[0]
 
 def get_barcoded_ont_bam_file(wildcards):
-    barcoded_bam = glob.glob(f'{data_dir}{wildcards.sample}/ont_r10.4.1_dorado/*.bam')
+    barcoded_bam = glob.glob(f'{data_dir}HG002/ont_r10.4.1_dorado/*.bam')
     return barcoded_bam
 
 def get_barcoded_ul_ont_fq_file(wildcards):
-    barcoded_bam = glob.glob(f'{data_dir}{wildcards.sample}/ul_ont_r10.4.1_dorado/*.fastq.gz')
+    barcoded_bam = glob.glob(f'{data_dir}HG002/ul_ont_r10.4.1_dorado/*.fastq.gz')
     return barcoded_bam
 
 
@@ -184,13 +184,13 @@ def get_input_align_hifi_reads(wildcards):
                 "ref": ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
                 "fai": ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa.fai")}
     elif wildcards.aligner == 'winnowmap':
-        rep_kmer=base_results_dir + f"{wildcards.sample}/alignments/{wildcards.assembler}.{wildcards.asm}.repetitive_k15.txt"
+        rep_kmer=base_results_dir + f"HG002/alignments/{wildcards.assembler}.{wildcards.asm}.repetitive_k15.txt"
         return {"reads": base_results_dir + "HG002/reads/" +  f"{wildcards.seq_tech}_reads.fq.gz",
                 "ref": ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
                 "fai": ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa.fai"),
                 "rep_kmer": rep_kmer}
     elif wildcards.aligner == 'pbmm2':
-        return {"reads": glob.glob(f'{data_dir}{wildcards.sample}/{wildcards.seq_tech}_reads/*[!unassigned].bam')[0],
+        return {"reads": glob.glob(f'{data_dir}HG002/{wildcards.seq_tech}_reads/*[!unassigned].bam')[0],
                 "ref": ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
                 "fai": ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa.fai")}
 
@@ -971,7 +971,7 @@ rule get_phased_sites:
 
 def get_input_shared_phased_sites(wildcards):
     return [base_results_dir +
-            f"{wildcards.sample}/deepvariant/deep_variant_hifi_hs1.{wildcards.aligner}.{wildcards.seq_tech}." +\
+            f"HG002/deepvariant/deep_variant_hifi_hs1.{wildcards.aligner}.{wildcards.seq_tech}." +\
             f"chr{wildcards.chrom}.filtered_{wildcards.variant_type}.{tool}_phased.phased_sites.tab" for tool in phasing_methods]
 
 rule get_shared_phased_sites:
