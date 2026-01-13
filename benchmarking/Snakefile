@@ -93,6 +93,7 @@ rule download_par_regions:
     params:
         url=par_regions_bed_url,
         output_dir=ref_dir
+    localrule: True
     shell:
         "wget -q -P {params.output_dir} {params.url}"
 
@@ -102,6 +103,7 @@ rule download_gt_variants:
     params:
         url=gt_variants_url,
         output_dir=ref_dir
+    localrule: True
     shell:
         "wget -q -P {params.output_dir} {params.url}"
 
