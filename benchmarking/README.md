@@ -11,6 +11,8 @@ The workflow will download the T2T reference genome (hs1) and the HG002 T2T-Q100
 
 You will have to download pb-CpG-tools and provide the path to the `aligned_bam_to_cpg_scores` executable in the `config/config.yaml`
 
+The workflow also assumes that any aligner you're chosing to use (`minimap2`, `winnowmap2`, or `pbmm2`) is installed and available in your `PATH`.
+
 To run the workflow, simply execute:
 ```commandline
 snakemake --profile profiles/ --use-conda

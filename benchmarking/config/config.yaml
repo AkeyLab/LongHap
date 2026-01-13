@@ -1,7 +1,7 @@
 base_results_dir: /scratch/gpfs/AKEY/apfennig/LongHap/
 ref_dir: /scratch/gpfs/AKEY/apfennig/LongHap/reference/
 data_dir: /scratch/gpfs/AKEY/apfennig/LongHap/data/
-aligner: minimap2 # minimap2 or winnowmap or pbmm2
+aligner: minimap2 # minimap2 or winnowmap or pbmm2 must be on PATH
 approx_sequenced_coverage: 40
 
 haplomaker_jar: /Genomics/argo/users/ap7577/HaploMaker/MFbio.jar

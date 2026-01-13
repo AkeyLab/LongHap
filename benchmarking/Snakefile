@@ -314,8 +314,8 @@ rule filter_variants:
         vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
         tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi"
     resources:
-        runtime=62,
-        mem_mb=16 * 1024
+        runtime=30,
+        mem_mb=4 * 1024
     conda:
         "envs/samtools.yaml"
     wildcard_constraints:
@@ -335,8 +335,8 @@ rule get_snvs:
     conda:
         "envs/samtools.yaml"
     resources:
-        runtime=62,
-        mem_mb=16 * 1024
+        runtime=30,
+        mem_mb=4 * 1024
     wildcard_constraints:
         aligner=aligner
     shell:
@@ -386,8 +386,8 @@ rule get_snvs_indels:
     conda:
         "envs/samtools.yaml"
     resources:
-        runtime=62,
-        mem_mb=16 * 1024
+        runtime=30,
+        mem_mb=4 * 1024
     shell:
         "bcftools concat {input.dv} {input.sniffles} | "
         "bcftools sort | "
@@ -445,8 +445,8 @@ rule run_longhap_meth_phase:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
     resources:
-        runtime=240,
-        mem_mb=32 * 1024
+        runtime=30,
+        mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth.benchmark"
     shell:
         "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
@@ -483,8 +483,8 @@ rule run_longhap_meth_phase_indels:
         seq_tech="|".join(seq_tech)
     threads: 1
     resources:
-        runtime=240,
-        mem_mb=32 * 1024
+        runtime=30,
+        mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth.benchmark"
     shell:
         "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
@@ -519,8 +519,8 @@ rule run_longhap_phase:
         seq_tech="|".join(seq_tech)
     threads: 1
     resources:
-        runtime=240,
-        mem_mb=32 * 1024
+        runtime=30,
+        mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap.benchmark"
     shell:
         "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
@@ -553,8 +553,8 @@ rule run_longhap_phase_indels:
         seq_tech="|".join(seq_tech)
     threads: 1
     resources:
-        runtime=240,
-        mem_mb=32 * 1024
+        runtime=30,
+        mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap.benchmark"
     shell:
         "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
@@ -643,8 +643,8 @@ rule run_hapcut2:
         chrom ='chr{chrom}',
         seqtech = get_extract_hairs_params
     resources:
-        runtime=120,
-        mem_mb=32*1024
+        runtime=30,
+        mem_mb=16*1024
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
@@ -672,8 +672,8 @@ rule run_hapcut2_indels:
         chrom ='chr{chrom}',
         seqtech = get_extract_hairs_params
     resources:
-        runtime=120,
-        mem_mb=32*1024
+        runtime=30,
+        mem_mb=16*1024
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
@@ -700,8 +700,8 @@ rule run_whatshap_phase:
         seq_tech = '|'.join(seq_tech)
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.whatshap.benchmark"
     resources:
-        runtime=120,
-        mem_mb=32*1024
+        runtime=30,
+        mem_mb=16*1024
     shell:
         "whatshap phase --only-snvs --ignore-read-groups -o {output.vcf} --reference={input.ref} {input.vcf} {input.bam}"
 
@@ -721,8 +721,8 @@ rule run_whatshap_phase_indels:
         seq_tech="|".join(seq_tech)
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap.benchmark"
     resources:
-        runtime=120,
-        mem_mb=32 * 1024
+        runtime=30,
+        mem_mb=16 * 1024
     shell:
         "whatshap phase --ignore-read-groups -o {output.vcf} --reference={input.ref} {input.vcf} {input.bam}"
 
@@ -746,8 +746,8 @@ rule run_longphase_phase:
         seq_tech="|".join(seq_tech)
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase.benchmark"
     resources:
-        runtime=65,
-        mem_mb=32 * 1024
+        runtime=15,
+        mem_mb=16 * 1024
     params:
         prefix=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase_phased",
         seqtech=get_seqtech_longphase
@@ -769,8 +769,8 @@ rule run_longphase_phase_indels:
         seq_tech="|".join(seq_tech)
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase.benchmark"
     resources:
-        runtime=65,
-        mem_mb=32 * 1024
+        runtime=15,
+        mem_mb=16 * 1024
     params:
         prefix=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase_phased",
         seqtech=get_seqtech_longphase
@@ -785,7 +785,9 @@ rule index_phased_vcf:
         base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi"
     conda:
         "envs/samtools.yaml"
-    localrule: True
+    resources:
+        runtime=5,
+        mem_mb=2 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
         aligner=aligner,
@@ -812,7 +814,7 @@ rule run_whatshap_haplotag:
     threads: 1
     benchmark: base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.haplotag.benchmark"
     resources:
-        runtime=24 * 60,
+        runtime=12 * 60,
         mem_mb=10 * 1024
     params:
         chrom='chr{chrom}'
@@ -829,7 +831,9 @@ rule run_whatshap_stats:
         tsv=base_results_dir+ "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv"
     conda:
         "envs/whatshap.yaml"
-    localrule: True
+    resources:
+        runtime=15,
+        mem_mb=4 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
         aligner=aligner,
@@ -845,7 +849,9 @@ rule run_whatshap_stats_complex:
         tsv=base_results_dir+ "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv"
     conda:
         "envs/whatshap.yaml"
-    localrule: True
+    resources:
+        runtime=15,
+        mem_mb=4 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
         aligner=aligner,
@@ -963,7 +969,7 @@ rule get_phased_sites:
         "envs/samtools.yaml"
     resources:
         mem_mb=4 * 1024,
-        runtime=62
+        runtime=15
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
@@ -980,7 +986,9 @@ rule get_shared_phased_sites:
         get_input_shared_phased_sites
     output:
         base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
-    localrule: True
+    resources:
+        mem_mb=4 * 1024,
+        runtime=10
     params:
         n_phasing_methods = lambda wildcards: len(phasing_methods)
     wildcard_constraints:
@@ -989,8 +997,6 @@ rule get_shared_phased_sites:
     shell:
         "cat {input} | sort | uniq -c | "
         "awk 'BEGIN{{OFS=\"\\t\"}}{{if ($1 == {params.n_phasing_methods}) print $2, $3}}' | sort -k2n > {output}"
-
-
 
 rule run_whatshap_compare_shared_sites:
     input:
@@ -1003,8 +1009,8 @@ rule run_whatshap_compare_shared_sites:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=16 * 1024,
-        runtime=62
+        mem_mb=4 * 1024,
+        runtime=15
     params:
         cmd_params = get_params_whatshap_compare
     wildcard_constraints:
@@ -1026,8 +1032,8 @@ rule run_whatshap_compare_shared_sites_complex:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=16 * 1024,
-        runtime=62
+        mem_mb=4 * 1024,
+        runtime=10
     params:
         cmd_params = get_params_whatshap_compare
     wildcard_constraints:
@@ -1049,8 +1055,8 @@ rule run_whatshap_compare_all:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=32 * 1024,
-        runtime=62
+        mem_mb=5 * 1024,
+        runtime=10
     params:
         cmd_params=get_params_whatshap_compare
     wildcard_constraints:
@@ -1071,8 +1077,8 @@ rule run_whatshap_compare_all_complex:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=32 * 1024,
-        runtime=62
+        mem_mb=4 * 1024,
+        runtime=10
     params:
         cmd_params=get_params_whatshap_compare
     wildcard_constraints:
