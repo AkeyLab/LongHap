@@ -1,0 +1,14 @@
+base_results_dir: /scratch/gpfs/AKEY/apfennig/LongHap/
+ref_dir: /scratch/gpfs/AKEY/apfennig/LongHap/reference/
+data_dir: /scratch/gpfs/AKEY/apfennig/LongHap/data/
+aligner: minimap2 # minimap2 or winnowmap or pbmm2
+approx_sequenced_coverage: 40
+
+haplomaker_jar: /Genomics/argo/users/ap7577/HaploMaker/MFbio.jar
+
+reference_genome_url: https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/hs1.fa.gz
+par_regions_bed_url: https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0_PAR.bed
+
+gt_variants_url: https://github.com/marbl/HG002-issues/blob/main/patches/already_applied/hg002v1.0.1_to_hg002v1.1.vcf.gz
+
+pb_cpg_model: /Genomics/argo/users/ap7577/pb-CpG-tools-v2.3.2-x86_64-unknown-linux-gnu/models/pileup_calling_model.v1.tflite
