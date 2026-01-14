@@ -787,7 +787,7 @@ rule index_phased_vcf:
     conda:
         "envs/samtools.yaml"
     resources:
-        runtime=5,
+        runtime=10,
         mem_mb=2 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
@@ -815,8 +815,8 @@ rule run_whatshap_haplotag:
     threads: 1
     benchmark: base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.haplotag.benchmark"
     resources:
-        runtime=12 * 60,
-        mem_mb=10 * 1024
+        runtime=30,
+        mem_mb=4 * 1024
     params:
         chrom='chr{chrom}'
     shell:
@@ -833,7 +833,7 @@ rule run_whatshap_stats:
     conda:
         "envs/whatshap.yaml"
     resources:
-        runtime=15,
+        runtime=10,
         mem_mb=4 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
@@ -851,7 +851,7 @@ rule run_whatshap_stats_complex:
     conda:
         "envs/whatshap.yaml"
     resources:
-        runtime=15,
+        runtime=10,
         mem_mb=4 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
@@ -869,13 +869,14 @@ rule get_primary_alignments:
     conda:
         "envs/samtools.yaml"
     resources:
-        runtime=720,
+        runtime=4 * 60,
         mem_mb=16 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
         chrom="|".join(autosomes),
         aligner=aligner,
         seq_tech= '|'.join(seq_tech)
+    benchmark: base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.primary_alignments.benchmark"
     params:
         chrom ="chr{chrom}"
     threads: 1
@@ -898,8 +899,8 @@ rule run_methphaser:
     threads: 1
     benchmark: base_results_dir + "HG002/deepvariant/{seq_tech}_{aligner}_methphaser_{chrom}.{variant_type}.benchmark"
     resources:
-        runtime=24 * 60,
-        mem_mb=128 * 1024
+        runtime=6 * 60,
+        mem_mb=24 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
         chrom="|".join(autosomes),
@@ -923,8 +924,8 @@ rule run_methphaser_post_processing:
     params:
         bam_prefix=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.primary_aln.{variant_type}"
     resources:
-        mem_mb=64 * 1024,
-        runtime=720
+        mem_mb=8 * 1024,
+        runtime=30
     wildcard_constraints:
         variant_type='snps|snps_indels',
         chrom="|".join(autosomes),
@@ -944,8 +945,8 @@ rule sort_methphaser:
     output:
         base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
     resources:
-        mem_mb=16 * 1024,
-        runtime=62
+        mem_mb=4 * 1024,
+        runtime=25
     conda:
         "envs/samtools.yaml"
     wildcard_constraints:
