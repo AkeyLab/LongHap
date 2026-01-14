@@ -24,6 +24,8 @@ rule all:
     input:
         expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
                aligner=aligner, chrom=autosomes + sex_chromosomes),
+        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi",
+               chrom=autosomes, variant_type=['snps', 'snps_indels'], phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
         expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.{sites}.bed",
                chrom=autosomes, variant_type=['snps', 'snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
