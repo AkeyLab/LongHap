@@ -19,8 +19,6 @@ phasing_methods = ['whatshap', 'whatshap_and_methphaser', 'longhap_meth', 'longh
 
 seq_tech = ['hifi', 'ont_r10.4.1_dorado', 'ul_ont_r10.4.1_dorado']
 
-ruleorder: run_whatshap_phase > run_whatshap_phase_indels > run_whatshap_stats > index_phased_vcf > run_whatshap_haplotag > get_primary_alignments > run_methphaser > run_methphaser_post_processing > sort_methphaser
-
 rule all:
     input:
         expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
