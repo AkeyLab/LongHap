@@ -653,7 +653,7 @@ rule run_hapcut2:
         vcf=temp(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2.phased.VCF"),
         bzvcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2_phased.vcf.gz"
     conda:
-        "envs/samtools.yaml"
+        "envs/hapcut2.yaml"
     params:
         chrom ='chr{chrom}',
         seqtech = get_extract_hairs_params
@@ -763,6 +763,8 @@ rule run_longphase_phase:
     resources:
         runtime=15,
         mem_mb=16 * 1024
+    conda:
+        "envs/longphase.yaml"
     params:
         prefix=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase_phased",
         seqtech=get_seqtech_longphase
@@ -786,6 +788,8 @@ rule run_longphase_phase_indels:
     resources:
         runtime=15,
         mem_mb=16 * 1024
+    conda:
+        "envs/longphase.yaml"
     params:
         prefix=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase_phased",
         seqtech=get_seqtech_longphase

@@ -24,6 +24,7 @@ LongHap's only requirements are Python >= 3.12 with the following packages insta
 - parasail-python >= 1.3.4
 - numpy >= 2.4.1
 - pandas >= 2.3.3
+- pyarrow >= 22.0.0
 - scipy >= 1.17.0
 - biopython >= 1.86
 - tqdm >= 4.67.1
