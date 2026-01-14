@@ -44,8 +44,6 @@ rule all:
         expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv",
                chrom=autosomes, variant_type=['snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
-        expand(base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
-               seq_tech=seq_tech, aligner=aligner)
 
 rule download_reference_genome:
     output:
