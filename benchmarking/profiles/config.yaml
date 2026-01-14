@@ -1,5 +1,5 @@
 executor: slurm
-jobs: 32
+jobs: 300
 default-resources:
  - runtime=2h
  - disk_mb=64000
@@ -7,3 +7,37 @@ default-resources:
  - job_name={rule}
  - mail_type=end
  - mail_user=ap7577@princeton.edu
+
+groups:
+ - filter_variants=PREP
+ - get_snvs=PREP
+ - get_snvs_indels=PREP
+ - run_hapcut2=PHASE
+ - run_hapcut2_indels=PHASE
+ - run_longhap_meth_phase=PHASE
+ - run_longhap_meth_phase_indels=PHASE
+ - run_longhap_phase=PHASE
+ - run_longhap_phase_indels=PHASE
+ - run_longphase_phase=PHASE
+ - run_longphase_phase_indels=PHASE
+ - run_whatshap_phase=PHASE
+ - run_whatshap_phase_indels=PHASE
+ - index_phased_vcf=PHASE
+ - get_phased_sites=PHASE
+ - get_primary_alignments=PHASE
+ - run_whatshap_haplotag=PHASE
+ - run_methphaser=PHASE
+ - run_methphaser_post_processing=PHASE
+ - sort_methphaser=PHASE
+ - run_whatshap_stats=PHASE
+ - get_shared_phased_sites=EVAL
+ - run_whatshap_compare_all=EVAL
+ - run_whatshap_compare_all_complex=EVAL
+ - run_whatshap_compare_shared_sites=EVAL
+ - run_whatshap_compare_shared_sites_complex=EVAL
+ - run_whatshap_stats_complex=EVAL
+
+group-components:
+ - PREP=5
+ - PHASE=10
+ - EVAL=96
