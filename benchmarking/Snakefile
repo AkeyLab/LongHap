@@ -373,11 +373,27 @@ rule reheader_sniffls:
         "bcftools view -h {input} | sed 's/SAMPLE/default/' > {output.header}; "
         "bcftools reheader -h {output.header} {input} > {output.vcf}; tabix {output.vcf}"
 
+
+rule filter_sniffles:
+    input:
+        base_results_dir + "HG002/sniffles/sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz"
+    output:
+        base_results_dir + "HG002/sniffles/sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.filtered.vcf.gz"
+    conda:
+        "envs/samtools.yaml"
+    resources:
+        runtime=10,
+        mem_mb=4 * 1024
+    wildcard_constraints:
+        chrom="|".join(autosomes + sex_chromosomes)
+    shell:
+        "bcftools view -i 'SVTYPE!=\"BND\" && GQ >=20' -Oz -o {output} {input}; tabix {output}"
+
 rule get_snvs_indels:
     input:
         dv=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
         dv_tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
-        sniffles=base_results_dir + "HG002/sniffles/sniffles_hifi_hs1.{aligner}.chr{chrom}.vcf.gz",
+        sniffles=base_results_dir + "HG002/sniffles/sniffles_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
         vcf = base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
