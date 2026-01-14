@@ -397,7 +397,7 @@ rule call_methylations:
     input:
         bam=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.bam",
     output:
-        base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed"
+        base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
     params:
         prefix=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation",
         exec=aligned_bam_to_cpg_scores_path
@@ -423,7 +423,7 @@ rule run_longhap_meth_phase:
         tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
-        methylation=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed"
+        methylation=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
     output:
         vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_phased.vcf.gz",
         blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_blocks.bed",
@@ -461,7 +461,7 @@ rule run_longhap_meth_phase_indels:
         tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
-        methylation=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed"
+        methylation=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
     output:
         vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_phased.vcf.gz",
         blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_blocks.bed",
