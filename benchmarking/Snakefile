@@ -19,7 +19,7 @@ phasing_methods = ['whatshap', 'whatshap_and_methphaser', 'longhap_meth', 'longh
 
 seq_tech = ['hifi', 'ont_r10.4.1_dorado', 'ul_ont_r10.4.1_dorado']
 
-ruleorder: run_whatshap_phase > run_whatshap_phase_indels > index_phased_vcf > run_whatshap_haplotag > get_primary_alignments > run_methphaser > run_methphaser_post_processing > sort_methphaser
+ruleorder: run_whatshap_phase > run_whatshap_phase_indels > run_whatshap_stats > index_phased_vcf > run_whatshap_haplotag > get_primary_alignments > run_methphaser > run_methphaser_post_processing > sort_methphaser
 
 rule all:
     input:
