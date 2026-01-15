@@ -169,7 +169,7 @@ class LongHap:
             self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
                                                  names=['chrom', 'start', 'end', 'score', 'hap',
                                                         'coverage', 'mod_count', 'unmod_count',
-                                                        'ratio'], engine='pyarrow')
+                                                        'ratio'], engine='pyarrow', skiprows=7)
             # get putative differentially methylated sites
             self.methylation_calls = self.methylation_calls[(self.methylation_calls.chrom == self.chrom) &
                                                             (self.methylation_calls.coverage >= 10) &

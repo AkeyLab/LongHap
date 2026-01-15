@@ -177,7 +177,7 @@ If `--output_read_assignments` is specified, LongHap will write a TSV file with 
 
 ### Preparation of Inputs
 
-To leverage methylation information for phasing, LongHap also requires methylation calls in the form of a BED file. Currently, LongHap expects the file to be generated with `aligned_bam_to_cpg_scores` from [pb-cpg-tools](https://github.com/PacificBiosciences/pb-CpG-tools).
+To leverage methylation information for phasing, LongHap also requires methylation calls in the form of a BED file. Currently, LongHap expects the file to be generated with `aligned_bam_to_cpg_scores` from [pb-cpg-tools](https://github.com/PacificBiosciences/pb-CpG-tools), with the first seven rows being skipped as they are comments.
 
 A VCF file generated with any variant caller of your choice works. We chose to use [DeepVariant](https://github.com/google/deepvariant) to call small variants and [Sniffles2](https://github.com/fritzsedlazeck/Sniffles) to call large variants. We then merged the calls into one VCF file. **For optimal performance, we recommend that the final VCF file is left-aligned and multiallelic sites are merged, using `bcftools norm -m+`.**
 
