@@ -1,6 +1,9 @@
 import glob
+import os
 
 configfile: 'config/config.yaml'
+cwd = os.getcwd()
+print(cwd)
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']
@@ -682,7 +685,7 @@ rule run_hapcut2_indels:
         vcf=temp(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2.phased.VCF"),
         bzvcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2_phased.vcf.gz"
     conda:
-        "envs/samtools.yaml"
+        "envs/hapcut2.yaml"
     params:
         chrom ='chr{chrom}',
         seqtech = get_extract_hairs_params
