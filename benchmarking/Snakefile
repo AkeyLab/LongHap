@@ -3,7 +3,7 @@ import os
 
 configfile: 'config/config.yaml'
 cwd = os.getcwd()
-print(cwd)
+longhap_path = cwd.split('benchmarking')[0] + 'LongHap.py'
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']
@@ -454,10 +454,11 @@ rule run_longhap_meth_phase:
         unphaseable_variants= base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_unphaseable_variants.npz",
         allele_coverage= base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_allele_coverage.npz"
     conda:
-        "../longhap.yaml"
+        "envs/longhap.yaml"
     params:
         chrom="chr{chrom}",
-        options=get_longhap_options
+        options=get_longhap_options,
+        longhap_path=longhap_path
     threads: 1
     wildcard_constraints:
         aligner=aligner,
@@ -467,7 +468,7 @@ rule run_longhap_meth_phase:
         mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth.benchmark"
     shell:
-        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_variant_read_mapping {output.variant_read_mapping} --output_allele_coverage {output.allele_coverage} "
         "--output_unphaseable_variants {output.unphaseable_variants} --output_read_states {output.read_states} "
@@ -492,10 +493,11 @@ rule run_longhap_meth_phase_indels:
         unphaseable_variants=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_unphaseable_variants.npz",
         allele_coverage=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_allele_coverage.npz"
     conda:
-        "../longhap.yaml"
+        "envs/longhap.yaml"
     params:
         chrom="chr{chrom}",
-        options=get_longhap_options
+        options=get_longhap_options,
+        longhap_path=longhap_path
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
@@ -505,7 +507,7 @@ rule run_longhap_meth_phase_indels:
         mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth.benchmark"
     shell:
-        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_variant_read_mapping {output.variant_read_mapping} "
         "--output_unphaseable_variants {output.unphaseable_variants} "
@@ -528,10 +530,11 @@ rule run_longhap_phase:
         unphaseable_variants=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_unphaseable_variants.npz",
         allele_coverage=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_allele_coverage.npz"
     conda:
-        "../longhap.yaml"
+        "envs/longhap.yaml"
     params:
         chrom="chr{chrom}",
-        options=get_longhap_options
+        options=get_longhap_options,
+        longhap_path=longhap_path
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
@@ -541,7 +544,7 @@ rule run_longhap_phase:
         mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap.benchmark"
     shell:
-        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_read_states {output.read_states} "
         "--output_variant_read_mapping {output.variant_read_mapping} --output_allele_coverage {output.allele_coverage} "
@@ -562,10 +565,11 @@ rule run_longhap_phase_indels:
         unphaseable_variants=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_unphaseable_variants.npz",
         allele_coverage=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_allele_coverage.npz"
     conda:
-        "../longhap.yaml"
+        "envs/longhap.yaml"
     params:
         chrom="chr{chrom}",
-        options=get_longhap_options
+        options=get_longhap_options,
+        longhap_path=longhap_path
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
@@ -575,7 +579,7 @@ rule run_longhap_phase_indels:
         mem_mb=16 * 1024
     benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap.benchmark"
     shell:
-        "../LongHap.py --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
+        "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
         "--output_read_states {output.read_states} --output_allele_coverage {output.allele_coverage} " 
         "--output_variant_read_mapping {output.variant_read_mapping} "
