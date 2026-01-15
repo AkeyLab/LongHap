@@ -1,9 +1,7 @@
 import glob
-import os
 
 configfile: 'config/config.yaml'
-cwd = os.getcwd()
-longhap_path = cwd.split('benchmarking')[0] + 'LongHap.py'
+longhap_path =  '~/LongHap/LongHap.py'
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']
