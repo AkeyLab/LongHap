@@ -105,7 +105,7 @@ rule download_gt_variants:
         output_dir=ref_dir
     localrule: True
     shell:
-        "wget -q -P {params.output_dir} {params.url}"
+        "wget -q -P {params.output_dir} {params.url}; wget -q -P {params.output_dir} {params.url}.tbi"
 
 def get_barcoded_pb_bam_file(wildcards):
     barcoded_bam = glob.glob(f'{data_dir}HG002/hifi_reads/*[!unassigned].bam')

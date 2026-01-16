@@ -9,6 +9,6 @@ haplomaker_jar: /Genomics/argo/users/ap7577/HaploMaker/MFbio.jar
 reference_genome_url: https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/hs1.fa.gz
 par_regions_bed_url: https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0_PAR.bed
 
-gt_variants_url: https://github.com/marbl/HG002-issues/blob/main/patches/already_applied/hg002v1.0.1_to_hg002v1.1.vcf.gz
+gt_variants_url: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/analysis/NIST_HG002_DraftBenchmark_defrabbV0.020-20250117/CHM13v2.0_HG2-T2TQ100-V1.1_stvar.vcf.gz
 
 aligned_bam_to_cpg_scores_path: /home/ap7577/LongHap/pb-CpG-tools-v3.0.0-x86_64-unknown-linux-gnu/bin/aligned_bam_to_cpg_scores
