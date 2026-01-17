@@ -1037,13 +1037,14 @@ rule run_whatshap_compare_shared_sites:
         mem_mb=4 * 1024,
         runtime=15
     params:
-        cmd_params = get_params_whatshap_compare
+        cmd_params = get_params_whatshap_compare,
+        chrom='chr{chrom}'
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
     shell:
         "whatshap compare --names truth,query --ignore-sample-name --tsv-pairwise {output.tab} {params.cmd_params} "
-        "--switch-error-bed {output.bed} <(bcftools norm -m -any {input.gt}) "
+        "--switch-error-bed {output.bed} <(bcftools norm -r {params.chrom} -m -any {input.gt}) "
         "<(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any | bcftools view -T <(sort -k2n {input.shared_sites}))"
 
 rule run_whatshap_compare_shared_sites_complex:
@@ -1060,13 +1061,14 @@ rule run_whatshap_compare_shared_sites_complex:
         mem_mb=4 * 1024,
         runtime=10
     params:
-        cmd_params = get_params_whatshap_compare
+        cmd_params = get_params_whatshap_compare,
+        chrom='chr{chrom}'
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
     shell:
         "whatshap compare --names truth,query --ignore-sample-name --tsv-pairwise {output.tab} {params.cmd_params} "
-        "--switch-error-bed {output.bed} <(bcftools norm -m -any {input.gt}) "
+        "--switch-error-bed {output.bed} <(bcftools norm -r {params.chrom} -m -any {input.gt}) "
         "<(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any | "
         "bcftools view -T <(sort -k2n {input.shared_sites}) | bcftools view -V snps)"
 
@@ -1083,13 +1085,15 @@ rule run_whatshap_compare_all:
         mem_mb=5 * 1024,
         runtime=10
     params:
-        cmd_params=get_params_whatshap_compare
+        cmd_params=get_params_whatshap_compare,
+        chrom='chr{chrom}'
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
     shell:
         "whatshap compare --names truth,query --ignore-sample-name --tsv-pairwise {output.tab} {params.cmd_params} "
-        "--switch-error-bed {output.bed} <(bcftools norm -m -any {input.gt}) <(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any )"
+        "--switch-error-bed {output.bed} <(bcftools norm -r {params.chrom} -m -any {input.gt}) "
+        "<(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any )"
 
 
 rule run_whatshap_compare_all_complex:
@@ -1105,12 +1109,13 @@ rule run_whatshap_compare_all_complex:
         mem_mb=4 * 1024,
         runtime=10
     params:
-        cmd_params=get_params_whatshap_compare
+        cmd_params=get_params_whatshap_compare,
+        chrom='chr{chrom}'
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
     shell:
         "whatshap compare --names truth,query --ignore-sample-name --tsv-pairwise {output.tab} {params.cmd_params} "
-        "--switch-error-bed {output.bed} <(bcftools norm -m -any {input.gt}) <(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | "
-        "bcftools norm -m -any | bcftools view -V snps)"
+        "--switch-error-bed {output.bed} <(bcftools norm -r {params.chrom} -m -any {input.gt})"
+        " <(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any | bcftools view -V snps)"
 
