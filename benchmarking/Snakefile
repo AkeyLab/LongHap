@@ -1012,8 +1012,8 @@ rule get_shared_phased_sites:
     output:
         base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
     resources:
-        mem_mb=4 * 1024,
-        runtime=10
+        mem_mb=2 * 1024,
+        runtime=30
     params:
         n_phasing_methods = lambda wildcards: len(phasing_methods)
     wildcard_constraints:
@@ -1034,8 +1034,8 @@ rule run_whatshap_compare_shared_sites:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=4 * 1024,
-        runtime=15
+        mem_mb=2 * 1024,
+        runtime=30
     params:
         cmd_params = get_params_whatshap_compare,
         chrom='chr{chrom}'
@@ -1058,8 +1058,8 @@ rule run_whatshap_compare_shared_sites_complex:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=4 * 1024,
-        runtime=10
+        mem_mb=2 * 1024,
+        runtime=30
     params:
         cmd_params = get_params_whatshap_compare,
         chrom='chr{chrom}'
@@ -1082,8 +1082,8 @@ rule run_whatshap_compare_all:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=5 * 1024,
-        runtime=10
+        mem_mb=2 * 1024,
+        runtime=30
     params:
         cmd_params=get_params_whatshap_compare,
         chrom='chr{chrom}'
@@ -1106,8 +1106,8 @@ rule run_whatshap_compare_all_complex:
     conda:
         "envs/whatshap.yaml"
     resources:
-        mem_mb=4 * 1024,
-        runtime=10
+        mem_mb=2 * 1024,
+        runtime=30
     params:
         cmd_params=get_params_whatshap_compare,
         chrom='chr{chrom}'
