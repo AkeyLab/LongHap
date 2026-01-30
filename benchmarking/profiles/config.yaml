@@ -5,8 +5,6 @@ default-resources:
  - disk_mb=64000
  - cpus_per_tasks={rule.threads}
  - job_name={rule}
- - mail_type=end
- - mail_user=ap7577@princeton.edu
 
 groups:
  - filter_variants=PREP
@@ -40,4 +38,4 @@ groups:
 group-components:
  - PREP=5
  - PHASE=10
- - EVAL=96
+ - EVAL=22
