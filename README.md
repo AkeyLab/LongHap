@@ -211,17 +211,17 @@ LongHap achieves a lower switch error rate than WhatsHap and HapCUT2, but higher
 
 ### Computational requirements
 
-LongHap phases in <15 minutes using a single thread and <8 Gb of memory. The exact requirements depend on sequencing coverage, the number of heterozygous variants, density of structural variants that require local realignment, and density of methylated sites.
+LongHap phases in <35 minutes using a single thread and <10 Gb of memory. The exact requirements depend on sequencing coverage, the number of heterozygous variants, density of structural variants that require local realignment, and density of methylated sites.
 Below we provide the run times for phasing chromosome 1 of HG002 using PacBio HiFi, ONT, and UL-ONT data.
 
 | Data type     | Coverage | Read length N50 | LongHap Mode | Time (hh:mm:ss) | Memory (Gb) |
 |---------------|----------|------------------|--------------|-----------------|-------------|
-| PacBio HiFi   | 38x      | 18 kb           | Sequence only | 00:04:52        | 2.1         |
-| PacBio HiFi   | 38x      | 18 kb           | Sequence + Methylation | 00:07:39        | 6.5         |
-| ONT R10.4.1   | 45x      | 29 kb           | Sequence only | 00:15:21        | 2.5         |
-| ONT R10.4.1   | 45x      | 29 kb           | Sequence + Methylation | 00:26:10        | 2.5         |
-| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence only | 00:20:52        | 2.2         |
-| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence + Methylation | 00:19:36        | 2.9         |
+| PacBio HiFi   | 38x      | 18 kb           | Sequence only | 00:04:19        | 2.1         |
+| PacBio HiFi   | 38x      | 18 kb           | Sequence + Methylation | 00:06:05        | 9.5         |
+| ONT R10.4.1   | 45x      | 29 kb           | Sequence only | 00:12:34        | 3.1         |
+| ONT R10.4.1   | 45x      | 29 kb           | Sequence + Methylation | 00:34:12        | 6.7         |
+| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence only | 00:13:22        | 2.9         |
+| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence + Methylation | 00:20:33        | 7.5         |
 
 ### Citation
 
