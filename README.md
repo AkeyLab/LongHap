@@ -29,12 +29,23 @@ LongHap's only requirements are Python >= 3.12 with the following packages insta
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
-All Python dependencies can be installed using the provided `longhap.yaml` file with conda:
+LongHap can be installed from PyPI:
+```commandline
+pip install longhap
+```
+
+Alternatively, all dependencies can be installed using the provided `longhap.yaml` file with conda:
 ```commandline
 git clone https://github.com/AkeyLab/LongHap.git
 cd LongHap/
-conda env create -f longhap.yml
+conda env create -f longhap.yaml
 conda activate longhap
+pip install .
+```
+
+**Note for macOS users:** Some dependencies (e.g., `parasail`, `cyvcf2`) require C build tools. If installation fails, install the following via Homebrew first:
+```commandline
+brew install autoconf automake libtool
 ```
 
 ### Usage
