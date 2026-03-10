@@ -856,7 +856,7 @@ rule run_whatshap_stats:
     conda:
         "envs/whatshap.yaml"
     resources:
-        runtime=10,
+        runtime=20,
         mem_mb=4 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
@@ -874,7 +874,7 @@ rule run_whatshap_stats_complex:
     conda:
         "envs/whatshap.yaml"
     resources:
-        runtime=10,
+        runtime=20,
         mem_mb=4 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
@@ -994,7 +994,7 @@ rule get_phased_sites:
         "envs/samtools.yaml"
     resources:
         mem_mb=4 * 1024,
-        runtime=15
+        runtime=20
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
