@@ -26,7 +26,7 @@ LongHap's only requirements are Python >= 3.12 with the following packages insta
 - pandas >= 2.3.3
 - pyarrow >= 22.0.0
 - scipy >= 1.17.0
-- biopython >= 1.86
+- pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
 All Python dependencies can be installed using the provided `longhap.yaml` file with conda:
@@ -85,21 +85,18 @@ To exclude bases covering heterozygous variants with a base quality below a cert
 #### The complete list of options
 ```
 ./LongHap.py -h
-usage: LongHap.py [-h] --vcf VCF -b BAM -r REFERENCE -c CHROM [-m METHYLATION_CALLS] [--snvs_only] [--multiallelics] 
-                  [--ont] [--pacbio] [--max_allele_length MAX_ALLELE_LENGTH] [--min_allele_count MIN_ALLELE_COUNT]
-                  [--min_base_quality MIN_BASE_QUALITY] -o OUTPUT_VCF [--output_bam OUTPUT_BAM] [--output_read_assignments OUTPUT_READ_ASSIGNMENTS] 
-                  [--output_blocks OUTPUT_BLOCKS] [--output_differentially_methylated_sites OUTPUT_DIFFERENTIALLY_METHYLATED_SITES] 
-                  [--output_transition_matrix OUTPUT_TRANSITION_MATRIX] [--output_transition_matrix_meth OUTPUT_TRANSITION_MATRIX_METH] 
-                  [--output_read_states OUTPUT_READ_STATES] [--output_variant_read_mapping OUTPUT_VARIANT_READ_MAPPING] 
-                  [--output_allele_coverage OUTPUT_ALLELE_COVERAGE] [--output_unphaseable_variants OUTPUT_UNPHASEABLE_VARIANTS]  
-                  [--use_all_methylated_sites] [--force] [--log LOG] [-v]
+usage: LongHap.py [-h] --vcf VCF -b BAM -r REFERENCE -c CHROM [-m METHYLATION_CALLS] [--snvs_only] [--multiallelics] [--ont] [--pacbio] [--max_allele_length MAX_ALLELE_LENGTH] [--min_allele_count MIN_ALLELE_COUNT]
+                  [--min_base_quality MIN_BASE_QUALITY] [--min_mapq MIN_MAPQ] [--flank_snv FLANK_SNV] [--flank_indel FLANK_INDEL] -o OUTPUT_VCF [--output_bam OUTPUT_BAM] [--output_read_assignments OUTPUT_READ_ASSIGNMENTS]
+                  [--output_blocks OUTPUT_BLOCKS] [--output_transition_matrix OUTPUT_TRANSITION_MATRIX] [--output_transition_matrix_meth OUTPUT_TRANSITION_MATRIX_METH] [--output_read_states OUTPUT_READ_STATES]
+                  [--output_variant_read_mapping OUTPUT_VARIANT_READ_MAPPING] [--output_allele_coverage OUTPUT_ALLELE_COVERAGE] [--output_unphaseable_variants OUTPUT_UNPHASEABLE_VARIANTS]
+                  [--output_differentially_methylated_sites OUTPUT_DIFFERENTIALLY_METHYLATED_SITES] [--use_all_methylated_sites] [--force] [--log LOG] [-v]
 
 options:
   -h, --help            show this help message and exit
   --vcf VCF             Input VCF with called variants
   -b BAM, --bam BAM     Sorted alignment bam
   -r REFERENCE, --reference REFERENCE
-                        Reference fasta
+                        Reference fasta. Must be indexed with samtools faidx.
   -c CHROM, --chrom CHROM
                         Chromosome
   -m METHYLATION_CALLS, --methylation_calls METHYLATION_CALLS
@@ -113,8 +110,13 @@ options:
   --min_allele_count MIN_ALLELE_COUNT
                         How many examples of the minor allele must be present in the reads to consider the variant for phasing [1]
   --min_base_quality MIN_BASE_QUALITY
-                        Minimum base quality to consider a base for phasing. Only affects SNP phasing. For HiFi data, all bases should be consider, that is a minimum quality of 0.
-                        For ONT data, a threshold of 10 is recommended [0]
+                        Minimum base quality to consider a base for phasing. Only affects SNP phasing. For HiFi data, all bases should be consider, that is a minimum quality of 0. For ONT data, a threshold of 10 is recommended
+                        [0]
+  --min_mapq MIN_MAPQ   Minimum mapping quality to consider a read for phasing [20]
+  --flank_snv FLANK_SNV
+                        Number of flanking bp to use for realignment around uncertain SNVs. Default is 66 for ONT and 33 for PacBio
+  --flank_indel FLANK_INDEL
+                        Number of flanking bp to use for realignment around uncertain indels. Default is 200 for ONT and 100 for PacBio
   -o OUTPUT_VCF, --output_vcf OUTPUT_VCF
                         Output phased vcf
   --output_bam OUTPUT_BAM
@@ -123,14 +125,10 @@ options:
                         Haplotype assignments for each read
   --output_blocks OUTPUT_BLOCKS
                         Haplotype blocks in bed format
-  --output_differentially_methylated_sites OUTPUT_DIFFERENTIALLY_METHYLATED_SITES
-                        Write differentially methylated files used by longhap to infer transitions to file
   --output_transition_matrix OUTPUT_TRANSITION_MATRIX
                         If provided transition matrix will be saved to this file as numpy array (.npz). Allows faster re-runs.
   --output_transition_matrix_meth OUTPUT_TRANSITION_MATRIX_METH
                         If provided transition matrix filled in with methylation data will be saved to this file as numpy array (.npz). Allows faster re-runs.
-  --output_transition_matrix_pop OUTPUT_TRANSITION_MATRIX_POP
-                        If provided transition matrix filled in with population data will be saved to this file as numpy array (.npz). Allows faster re-runs.
   --output_read_states OUTPUT_READ_STATES
                         If provided read states will be saved to this file as json. Allows faster re-runs.
   --output_variant_read_mapping OUTPUT_VARIANT_READ_MAPPING
@@ -139,11 +137,11 @@ options:
                         If provided allele coverage will be saved to this file as npy (.npy). Sites with one allele absent from reads bill be ignored. Allows faster re-runs.
   --output_unphaseable_variants OUTPUT_UNPHASEABLE_VARIANTS
                         If provided unphaseable variants will be saved to this file as npz. Allows faster re-runs.
+  --output_differentially_methylated_sites OUTPUT_DIFFERENTIALLY_METHYLATED_SITES
+                        Write differentially methylated files used by longhap to infer transitions to file
   --use_all_methylated_sites
-                        Whether to use all methylated sites or not. If False, at most 25,000 methylated sites per transition are used. This guarantees fast runtimes and does not
-                        seem to sacrifice accuracy. [False]
-  --force               If transition matrix output is provided and file already exists this file will be loaded by default unless --force is set. Then the transition matrix will be
-                        re-inferred.
+                        Whether to use all methylated sites or not. If False, at most 25,000 methylated sites per transition are used. This guarantees fast runtimes and does not seem to sacrifice accuracy. [False]
+  --force               If transition matrix output is provided and file already exists this file will be loaded by default unless --force is set. Then the transition matrix will be re-inferred.
   --log LOG             Log file
   -v, --verbose         Print logging information to stdout
 ```
