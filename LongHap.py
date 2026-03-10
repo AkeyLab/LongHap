@@ -36,7 +36,8 @@ class LongHap:
                  output_transition_matrix_pop=None, output_differentially_methylated_sites=None,
                  output_unphaseable_variants=None, snvs_only=False, multiallelics=False,
                  use_all_methylated_sites=False, max_meth_distance=5000, maf_thresh=0.01, error_rate=1e-3, llr_thresh=4,
-                 sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_base_quality=0, seqtech='pacbio'):
+                 sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_base_quality=0, min_mapq=20,
+                 flank_snv=33, flank_indel=100, seqtech='pacbio'):
         self.chrom = chrom
         self.snvs_only = snvs_only
         self.multiallelics = multiallelics
@@ -69,6 +70,9 @@ class LongHap:
         self.max_allele_length = max_allele_length
         self.min_allele_count = min_allele_count
         self.min_base_quality = min_base_quality
+        self.min_mapq = min_mapq
+        self.flank_snv = flank_snv
+        self.flank_indel = flank_indel
         self.seqtech = seqtech
 
         self.methylation_read_assignments = defaultdict(list)
@@ -511,13 +515,12 @@ class LongHap:
         allele_b = variant['alleles'][variant['gt'][1]]
         position = variant['POS'] - 1
         max_allele_len = np.max([len(allele_ref), len(allele_a), len(allele_b)])
-        if self.seqtech == "ont":
-            flank = 200
+        if max_allele_len == 1:
+            flank = self.flank_snv
         else:
-            flank = 100
+            flank = self.flank_indel
         # for SNPs choose smaller window and penalize gaps more
-        if len(allele_ref) == len(allele_a) == len(allele_b) == 1:
-            flank = np.floor(flank / 3).astype(int)
+        if max_allele_len == 1:
             gap_open = int(gap_open * 2)
         if homopolymer:
             gap_open -= 2
@@ -894,7 +897,7 @@ class LongHap:
         for read in self.alignments.fetch(self.chrom, start, end + 1):
             # only consider primary alignments
             if (read.is_secondary or read.is_duplicate or read.is_unmapped or
-                    read.is_qcfail or read.mapping_quality < 20 or not read.has_tag("MM")):
+                    read.is_qcfail or read.mapping_quality < self.min_mapq or not read.has_tag("MM")):
                 continue
             read_name = read.query_name
             if self.prev_methylations is not None:
@@ -1828,7 +1831,7 @@ class LongHap:
         variant_homopolymer_mapping = {}
         for read in tqdm(self.alignments.fetch(self.chrom), total=self.alignments.count(self.chrom)):
             if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or
-                    read.mapping_quality < 20):
+                    read.mapping_quality < self.min_mapq):
                 continue
             prev_state = -1
             cigar = deque(read.cigartuples)
@@ -2280,12 +2283,19 @@ def read_phasing(args):
                             datefmt='%Y-%m-%d %H:%M:%S')
     if args.ont and not args.pacbio:
         seqtech = 'ont'
+        flank_snv = 66
+        flank_indel = 200
     elif args.pacbio and not args.ont:
         seqtech = 'pacbio'
+        flank_snv = 33
+        flank_indel = 100
     else:
         raise ValueError('Please specify sequencing technology either with --ont or --pacbio flag. '
                          'Only supporting PacBio or ONT.')
-
+    if args.flank_snv is not None:
+        flank_snv = args.flank_snv
+    if args.flank_indel is not None:
+        flank_indel = args.flank_indel
     longhap = LongHap(vcf_f=args.vcf, bam=args.bam, chrom=args.chrom, reference_path=args.reference,
                       output_vcf=args.output_vcf, output_read_states=args.output_read_states,
                       output_blocks=args.output_blocks, output_bam=args.output_bam,
@@ -2299,7 +2309,8 @@ def read_phasing(args):
                       snvs_only=args.snvs_only, multiallelics=args.multiallelics,
                       use_all_methylated_sites=args.use_all_methylated_sites, force=args.force,
                       max_allele_length=args.max_allele_length, min_allele_count=args.min_allele_count,
-                      min_base_quality=args.min_base_quality, seqtech=seqtech,
+                      min_base_quality=args.min_base_quality, seqtech=seqtech, min_mapq=args.min_mapq,
+                      flank_snv=flank_snv, flank_indel=flank_indel,
                       # reference_vcf=args.reference_vcf, reference_samples_file=args.reference_samples,
                       # maf_thresh=args.maf_thresh, output_transition_matrix_pop=args.output_transition_matrix_pop
                       )
@@ -2342,6 +2353,14 @@ def main(argv):
                            help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. '
                                 'For HiFi data, all bases should be consider, that is a minimum quality of 0. '
                                 'For ONT data, a threshold of 10 is recommended [0]', type=int, default=0)
+    parser.add_argument('--min_mapq', help='Minimum mapping quality to consider a read for phasing [20]',
+                        type=int, default=20)
+    parser.add_argument('--flank_snv', help='Number of flanking bp to use for realignment around '
+                                            'uncertain SNVs. Default is 66 for ONT and 33 for PacBio', type=int,
+                        default=None)
+    parser.add_argument('--flank_indel', help='Number of flanking bp to use for realignment around '
+                                              'uncertain indels. Default is 200 for ONT and 100 for PacBio', type=int,
+                        default=None)
     parser.add_argument('-o', '--output_vcf', help='Output phased vcf', required=True)
     parser.add_argument('--output_bam', help='Output haplotagged bam')
     parser.add_argument('--output_read_assignments', help='Haplotype assignments for each read')
