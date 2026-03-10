@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import argparse
-import os.path
+import os
 import sys
 from cyvcf2 import VCF, Writer
 import pysam
@@ -89,12 +89,18 @@ class LongHap:
         self.reference = self.read_reference_fasta(self.reference_path)
         self.reference = self.reference[self.chrom]
         logging.info(f'Loading variant calls from {self.vcf_f}')
+        if not os.path.isfile(self.vcf_f):
+            logging.error(f"VCF file {self.vcf_f} does not exist.")
+            sys.exit(1)
         self.idx_variant_mapping, self.variant_idx_mapping, self.variant_type = self.get_heterozygous_variants()
         self.num_variants = len(self.idx_variant_mapping)
         # intialize transition_matrix
         self.transition_matrix = np.zeros((2, 2, self.num_variants - 1)) + 1e-20
         self.allele_coverage = np.zeros((2, self.num_variants))
         logging.info(f'Loading read alignments from {self.bam}')
+        if not os.path.isfile(self.bam):
+            logging.error(f"BAM file {self.bam} does not exist.")
+            sys.exit(1)
         self.alignments = pysam.AlignmentFile(self.bam, 'rb')
         self.prev_state = dict()
         self.read_states = defaultdict(dict)
@@ -169,6 +175,9 @@ class LongHap:
             (not os.path.isfile(self.output_transition_matrix_meth) or
                 self.force or self.output_transition_matrix_meth is None)):
             logging.info(f'Loading methylation calls from {self.methylation_calls_f}')
+            if not os.path.isfile(self.methylation_calls_f):
+                logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
+                sys.exit(1)
             self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
                                                  names=['chrom', 'start', 'end', 'score', 'hap',
                                                         'coverage', 'mod_count', 'unmod_count',
@@ -253,6 +262,13 @@ class LongHap:
         :param filepath: str, file to path
         :return: dict, reference sequence
         """
+        if not os.path.isfile(filepath):
+            logging.error(f"Reference fasta file {filepath} does not exist.")
+            sys.exit(1)
+        if not os.paht.isfile(f'{filepath}.fai'):
+            logging.error(f"Index for reference fasta file {filepath} does not exist. "
+                          f"Index with samtools faidx {filepath}")
+            sys.exit(1)
         fasta = Fasta(filepath)
         return fasta
 
