@@ -2,13 +2,12 @@
 import argparse
 import os.path
 import sys
-import gzip
 from cyvcf2 import VCF, Writer
 import pysam
 from collections import deque, defaultdict
 from tqdm import tqdm
 import numpy as np
-from Bio import SeqIO
+from pyfaidx import Fasta
 import logging
 import pandas as pd
 from scipy.sparse import csc_array
@@ -254,11 +253,8 @@ class LongHap:
         :param filepath: str, file to path
         :return: dict, reference sequence
         """
-        if filepath.endswith('gz'):
-            fasta = gzip.open(filepath, 'rt')
-        else:
-            fasta = open(filepath, 'r')
-        return SeqIO.to_dict(SeqIO.parse(fasta, 'fasta'))
+        fasta = Fasta(filepath)
+        return fasta
 
     def get_heterozygous_variants(self):
         """
@@ -415,8 +411,8 @@ class LongHap:
             # There is a small benefit to this but it's slow because I do more realignments. I need to do something else
             elif self.seqtech == "ont":
                 query_length = len(query_sequence)
-                upstream_base = self.reference.seq[r_idx + read_start - 1].upper()
-                downstream_base = self.reference.seq[r_idx + read_start + 1].upper()
+                upstream_base = self.reference[r_idx + read_start - 1].seq.upper()
+                downstream_base = self.reference[r_idx + read_start + 1].seq.upper()
 
                 allele_a = upstream_base + allele_a + downstream_base
                 allele_b = upstream_base + allele_b + downstream_base
@@ -533,15 +529,15 @@ class LongHap:
         # get corresponding reference window with allele A and B inserted respectively
         flank_up = qpos - start
         flank_down = end - (qpos + np.max([len(allele_ref), len(allele_a), len(allele_b)]))
-        upstream = self.reference.seq[position - flank_up: position].upper()
+        upstream = self.reference[position - flank_up: position].seq.upper()
 
-        downstream_a = self.reference.seq[position + len(allele_ref): position + len(allele_ref) + flank_down +
-                                                                      (max_allele_len - len(allele_a))].upper()
+        downstream_a = self.reference[position + len(allele_ref): position + len(allele_ref) + flank_down +
+                                                                  (max_allele_len - len(allele_a))].seq.upper()
 
         ref_allele_a = str(upstream + allele_a + downstream_a)
 
-        downstream_b = self.reference.seq[position + len(allele_ref): position + len(allele_ref) + flank_down +
-                                                                      (max_allele_len - len(allele_b))].upper()
+        downstream_b = self.reference[position + len(allele_ref): position + len(allele_ref) + flank_down +
+                                                                  (max_allele_len - len(allele_b))].seq.upper()
 
         ref_allele_b = str(upstream + allele_b + downstream_b)
 
@@ -951,7 +947,8 @@ class LongHap:
                     operation = None
                     length = 0
                     if i not in variant_homopolymer_mapping:
-                        variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference.seq[pos - 5: pos + 5].upper(), k=4)
+                        variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
+                                                                             k=4)
                     state, qpos, _, _, _ = self.get_state_at_variant(read_sequence, read_base_qualities, cigar,
                                                                      read_start, r_idx, q_idx, operation, length,
                                                                      self.idx_variant_mapping[n])
@@ -1865,7 +1862,8 @@ class LongHap:
                     found_first_var = True
                     min_var_idx = i
                 if i not in variant_homopolymer_mapping:
-                    variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference.seq[pos - 5: pos + 5].upper(), k=4)
+                    variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
+                                                                         k=4)
                 state, q_idx, r_idx, operation, length = self.get_state_at_variant(read_sequence,
                                                                                    read_base_qualities, cigar,
                                                                                    read_start, r_idx,
@@ -2326,7 +2324,8 @@ def main(argv):
 
     parser.add_argument('--vcf', help='Input VCF with called variants', required=True)
     parser.add_argument('-b', '--bam', help='Sorted alignment bam', required=True)
-    parser.add_argument('-r', '--reference', help='Reference fasta', required=True)
+    parser.add_argument('-r', '--reference', help='Reference fasta. Must be indexed with samtools faidx',
+                        required=True)
     parser.add_argument('-c', '--chrom', help='Chromosome', required=True)
     parser.add_argument('-m', '--methylation_calls', help='Methylation calls from pileup model',
                            required=False, default=None)
