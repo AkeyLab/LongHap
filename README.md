@@ -61,7 +61,7 @@ If only a VCF and a BAM file are provided, LongHap will phase variants based on 
 #### Variant phasing based on sequence information alone:
 
 ```commandline
-./LongHap.py \
+./longhap.py \
     --vcf input_variants.vcf \
     --bam aligned.pacbio.bam \
     --reference reference.fasta \
@@ -73,7 +73,7 @@ If only a VCF and a BAM file are provided, LongHap will phase variants based on 
 #### Variant phasing based on sequence and methylation information:
 
 ```commandline
-./LongHap.py \
+./longhap.py \
     --vcf input_variants.vcf \
     --bam aligned.pacbio.bam \
     --reference reference.fasta \
@@ -95,7 +95,7 @@ To exclude bases covering heterozygous variants with a base quality below a cert
 
 #### The complete list of options
 ```
-./LongHap.py -h
+./longhap.py -h
 usage: LongHap.py [-h] --vcf VCF -b BAM -r REFERENCE -c CHROM [-m METHYLATION_CALLS] [--snvs_only] [--multiallelics] [--ont] [--pacbio] [--max_allele_length MAX_ALLELE_LENGTH] [--min_allele_count MIN_ALLELE_COUNT]
                   [--min_base_quality MIN_BASE_QUALITY] [--min_mapq MIN_MAPQ] [--flank_snv FLANK_SNV] [--flank_indel FLANK_INDEL] -o OUTPUT_VCF [--output_bam OUTPUT_BAM] [--output_read_assignments OUTPUT_READ_ASSIGNMENTS]
                   [--output_blocks OUTPUT_BLOCKS] [--output_transition_matrix OUTPUT_TRANSITION_MATRIX] [--output_transition_matrix_meth OUTPUT_TRANSITION_MATRIX_METH] [--output_read_states OUTPUT_READ_STATES]
