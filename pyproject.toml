@@ -4,13 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "longhap"
-version = "0.1.0"
+version = "0.1.1"
 description = "Read-based variant phasing with methylation integration for long-read sequencing"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 authors = [
     { name = "Aaron Pfennig" },
+]
+maintainers = [
+    { name = "Aaron Pfennig" },
+    { name = "Rob Bierman" },
 ]
 keywords = ["phasing", "long-read", "methylation", "genomics", "bioinformatics"]
 classifiers = [
@@ -37,7 +41,7 @@ Homepage = "https://github.com/AkeyLab/LongHap"
 Repository = "https://github.com/AkeyLab/LongHap"
 
 [project.scripts]
-longhap = "longhap.longhap:main"
+longhap = "longhap:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+py-modules = ["longhap"]

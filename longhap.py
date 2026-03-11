@@ -1,4 +1,5 @@
 import argparse
+from importlib.metadata import version
 import os
 import sys
 from cyvcf2 import VCF, Writer
@@ -2336,6 +2337,7 @@ def read_phasing(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
+    parser.add_argument('--version', action='version', version=version('longhap'))
 
     parser.add_argument('--vcf', help='Input VCF with called variants', required=True)
     parser.add_argument('-b', '--bam', help='Sorted alignment bam', required=True)
