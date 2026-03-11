@@ -265,7 +265,7 @@ class LongHap:
         if not os.path.isfile(filepath):
             logging.error(f"Reference fasta file {filepath} does not exist.")
             sys.exit(1)
-        if not os.paht.isfile(f'{filepath}.fai'):
+        if not os.path.isfile(f'{filepath}.fai'):
             logging.error(f"Index for reference fasta file {filepath} does not exist. "
                           f"Index with samtools faidx {filepath}")
             sys.exit(1)
