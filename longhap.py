@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+from importlib.metadata import version
 import os
 import sys
 from cyvcf2 import VCF, Writer
@@ -2051,8 +2052,9 @@ def read_phasing(args):
     longhap.write_results()
 
 
-def main(argv):
+def main(argv=None):
     parser = argparse.ArgumentParser()
+    parser.add_argument('--version', action='version', version=version('longhap'))
 
     parser.add_argument('--vcf', help='Input VCF with called variants', required=True)
     parser.add_argument('-b', '--bam', help='Sorted alignment bam', required=True)
@@ -2122,7 +2124,7 @@ def main(argv):
     parser.add_argument('-v', '--verbose', help='Print logging information to stdout', action='store_true',
                            default=False)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     read_phasing(args)
 
 

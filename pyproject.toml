@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "longhap"
+version = "0.1.3"
+description = "Read-based variant phasing with methylation integration for long-read sequencing"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Aaron Pfennig" },
+]
+maintainers = [
+    { name = "Aaron Pfennig" },
+    { name = "Rob Bierman" },
+]
+keywords = ["phasing", "long-read", "methylation", "genomics", "bioinformatics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "cyvcf2>=0.31.4",
+    "pysam>=0.23.3",
+    "parasail>=1.3.4",
+    "numpy>=2.4.1",
+    "pandas>=2.3.3",
+    "pyarrow>=22.0.0",
+    "scipy>=1.17.0",
+    "pyfaidx>=0.9.0.3",
+    "tqdm>=4.67.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/AkeyLab/LongHap"
+Repository = "https://github.com/AkeyLab/LongHap"
+
+[project.scripts]
+longhap = "longhap:main"
+
+[tool.setuptools]
+py-modules = ["longhap"]
