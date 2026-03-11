@@ -29,12 +29,12 @@ class NestedDict:
 
 class LongHap:
     def __init__(self, vcf_f, bam, chrom, reference_path, output_vcf, output_blocks, output_bam=None,
-                 output_read_assignments=None, methylation_calls_f=None, reference_vcf=None,
-                 reference_samples_file=None, output_transition_matrix=None, output_read_states=None,
+                 output_read_assignments=None, methylation_calls_f=None,
+                 output_transition_matrix=None, output_read_states=None,
                  output_variant_read_mapping=None, output_allele_coverage=None, output_transition_matrix_meth=None,
-                 output_transition_matrix_pop=None, output_differentially_methylated_sites=None,
+                 output_differentially_methylated_sites=None,
                  output_unphaseable_variants=None, snvs_only=False, multiallelics=False,
-                 use_all_methylated_sites=False, max_meth_distance=5000, maf_thresh=0.01, error_rate=1e-3, llr_thresh=4,
+                 use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh=4,
                  sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_base_quality=0, min_mapq=20,
                  flank_snv=33, flank_indel=100, seqtech='pacbio'):
         self.chrom = chrom
@@ -49,9 +49,6 @@ class LongHap:
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
         self.llr_thresh = llr_thresh
-        self.reference_vcf = reference_vcf
-        self.reference_samples_file = reference_samples_file
-        self.maf_thresh = maf_thresh
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
@@ -61,7 +58,6 @@ class LongHap:
         self.output_read_states = output_read_states
         self.output_variant_read_mapping = output_variant_read_mapping
         self.output_transition_matrix_meth = output_transition_matrix_meth
-        self.output_transition_matrix_pop = output_transition_matrix_pop
         self.output_differentially_methylated_sites = output_differentially_methylated_sites
         self.output_unphaseable_variants = output_unphaseable_variants
         self.sample = sample
@@ -172,8 +168,8 @@ class LongHap:
         """
         # check if necessary information for methylation phasing are given and if intermediate files can be re-used
         if (self.methylation_calls_f is not None and
-            (not os.path.isfile(self.output_transition_matrix_meth) or
-                self.force or self.output_transition_matrix_meth is None)):
+            (self.output_transition_matrix_meth is None or not os.path.isfile(self.output_transition_matrix_meth) or
+                self.force)):
             logging.info(f'Loading methylation calls from {self.methylation_calls_f}')
             if not os.path.isfile(self.methylation_calls_f):
                 logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
@@ -199,23 +195,6 @@ class LongHap:
             logging.info(
                 f'Loading methylation complemented transition matrix from {self.output_transition_matrix_meth}')
             self.transition_matrix = np.load(self.output_transition_matrix_meth)['arr_0']
-
-    def infer_population_transitions(self):
-        """
-        Infer transition matrix from population data
-        """
-        # check if necessary information for population phasing are given and if intermediate files exits
-        if (self.reference_vcf is not None and
-            (not os.path.isfile(self.output_transition_matrix_pop) or
-             self.force or
-             self.output_transition_matrix_pop is None)):
-            logging.info(f'Complementing variant (and/or methylation) transition matrix with population data '
-                         f'from {self.reference_vcf}')
-            self.get_population_transitions()
-        elif self.reference_vcf is not None and os.path.isfile(self.output_transition_matrix_pop):
-            logging.info(f'Loading population complemented transition matrix from {self.output_transition_matrix_pop}')
-
-            self.transition_matrix = np.load(self.output_transition_matrix_pop)['arr_0']
 
     def phase(self):
         """
@@ -254,7 +233,6 @@ class LongHap:
             f.write('chrom\tstart\tend\tscore\thap\tcoverage\tmod_count\tunmod_count\tratio\n')
             f.close()
 
-
     @staticmethod
     def read_reference_fasta(filepath):
         """
@@ -265,7 +243,7 @@ class LongHap:
         if not os.path.isfile(filepath):
             logging.error(f"Reference fasta file {filepath} does not exist.")
             sys.exit(1)
-        if not os.paht.isfile(f'{filepath}.fai'):
+        if not os.path.isfile(f'{filepath}.fai'):
             logging.error(f"Index for reference fasta file {filepath} does not exist. "
                           f"Index with samtools faidx {filepath}")
             sys.exit(1)
@@ -292,7 +270,7 @@ class LongHap:
             if (variant.gt_types == 1 and
                     -1 not in variant.genotypes[0][:2] and
                     (variant.is_snp or (variant.is_indel and not self.snvs_only)) and
-                    (len(variant.ALT) == 1 or self.multiallelics) and # only include multiallelics if specified
+                    (len(variant.ALT) == 1 or self.multiallelics) and  # only include multiallelics if specified
                     np.max([len(variant.REF), max([len(a) for a in variant.ALT])]) <= self.max_allele_length):
                 # skip complex variant that was split into 2
                 if has_allele_level_info and "_" in variant.ID:
@@ -513,9 +491,6 @@ class LongHap:
         :param query_sequence:  str, read query sequence
         :param variant: dict, complex variant
         :param qpos: int, index of variant in read
-        :param var_idx: int, index of variant in variant list
-        :param read_states: dict, allelic states of read at all variants
-        :param read_var_idx: list, indices of all variants that are covered by the read
         :param gap_open: int, gap open penalty for alignment
         :param gap_extend: int, gap extend penalty for alignment
         :param homopolymer: boolean, whether the variant is in a homopolymer region
@@ -560,14 +535,9 @@ class LongHap:
         aln_a = parasail.sg_stats_striped_sat(read_window, ref_allele_a, gap_open, gap_extend, parasail.dnafull)
         aln_b = parasail.sg_stats_striped_sat(read_window, ref_allele_b, gap_open, gap_extend, parasail.dnafull)
 
-
         # Compare alignment scores
         score_a = aln_a.score
         score_b = aln_b.score
-
-        # normalize by allele length
-        # score_a /= len(allele_a)
-        # score_b /= len(allele_b)
 
         if score_a > score_b:
             state = 0
@@ -678,19 +648,6 @@ class LongHap:
             else:
                 meth = -1
         return meth, r_idx, q_idx, operation, length
-
-    def calculate_transition_probability_from_methylation_log10(self, hap1, hap2, i, offset):
-        """
-        Calculate log10 probabilities of phase transitions between variants based on methylation data
-        :param hap1: np.array, haplotype A inferred based on methylation data
-        :param hap2: np.array, haplotype B inferred based on methylation data
-        :param i: int, index of target transition that was inferred from methylation dats
-        :param offset: int, number of subsequent transitions that were inferred
-        :return: np.array, modified phase transition matrix
-        """
-
-        self.calculate_transition_probability_from_methylation(hap1, hap2, i, offset)
-        self.transition_matrix[:, :, i] = np.log10(self.transition_matrix[:, :, i])
 
     @staticmethod
     def calculate_transition_probability_from_methylation_helper(hap, i):
@@ -1152,123 +1109,6 @@ class LongHap:
         if self.output_transition_matrix_meth is not None:
             np.savez(self.output_transition_matrix_meth, self.transition_matrix)
 
-    def get_closest_ref_variant(self, pos, ref, alt, ref_samples=None):
-        """
-        Get variant in reference panel with MAF > maf_thresh that matches specified variant in position and REF and ALT
-        :param pos: int, Target position
-        :param ref: str, reference allele
-        :param alt: str, alternative allele
-        :param ref_samples: list, list of reference samples
-        :return: dict, variant that matches specified variant
-        """
-        if ref_samples:
-            vcf = VCF(self.reference_vcf, samples=ref_samples)
-        else:
-            vcf = VCF(self.reference_vcf)
-        # restrict to matching biallelic variants
-        variants = [v for v in vcf(f'{self.chrom}:{pos}-{pos}')
-                    if (v.is_snp or (v.is_indel and not self.snvs_only)) and len(v.ALT) == 1 and
-                    ((v.REF.upper() == ref and v.ALT[0].upper() == alt) or
-                     (v.REF.upper() == alt and v.ALT[0].upper() == ref))]
-        if len(variants) == 0:
-            return None
-        elif len(variants) == 1 and variants[0].REF.upper() == ref:
-            genotypes = np.stack(variants[0].genotypes)[:, :2]
-            aaf = genotypes.sum() / genotypes.size
-            if self.maf_thresh < aaf < 1 - self.maf_thresh:
-                variant = dict()
-                variant['REF'] = variants[0].REF.upper()
-                variant['ALT'] = variants[0].ALT[0].upper()
-                variant['gts'] = genotypes
-                variant['AAF'] = aaf
-                variant['RAF'] = 1 - aaf
-                variant['POS'] = variants[0].POS
-                return variant
-        elif len(variants) == 1 and variants[0].REF.upper() == alt:
-            genotypes = 1 - np.stack(variants[0].genotypes)[:, :2]
-            aaf = genotypes.sum() / genotypes.size
-            if self.maf_thresh < aaf < 1 - self.maf_thresh:
-                variant = dict()
-                variant['REF'] = variants[0].ALT[0].upper()
-                variant['ALT'] = variants[0].REF.upper()
-                variant['gts'] = genotypes
-                variant['AAF'] = aaf
-                variant['RAF'] = 1 - aaf
-                variant['POS'] = variants[0].POS
-                return variant
-
-            # maf is less than threshold
-            else:
-                return None
-        else:
-            return None
-
-    def get_population_transitions(self):
-        """
-        Fill in uncertain transition based on correlations in reference population data
-        """
-        uncertain_transitions = self.get_uncertain_transitions(self.transition_matrix[:, :,
-                                                               self.phaseable[self.phaseable < self.num_variants - 1]])
-        n_uncertain_transitions = len(uncertain_transitions)
-        if self.reference_samples_file:
-            ref_samples = []
-            with open(self.reference_samples_file, 'r') as f:
-                for line in f:
-                    ref_samples.append(line.strip())
-            f.close()
-        else:
-            ref_samples = None
-        pbar = tqdm(total=len(uncertain_transitions))
-        while uncertain_transitions:
-            # include last certain transition
-            i = uncertain_transitions.popleft()
-            idx_var_a = i
-            idx_var_b = i + 1
-            if idx_var_b > self.phaseable.shape[0] - 1:
-                continue
-            idx_var_a = self.phaseable[idx_var_a]
-            idx_var_b = self.phaseable[idx_var_b]
-            if (idx_var_a < 0 or idx_var_b > self.num_variants - 1 or
-                    len(self.idx_variant_mapping[idx_var_a]["ALT"]) > 1):
-                pbar.update(1)
-                continue
-            variant_a = self.get_closest_ref_variant(self.idx_variant_mapping[idx_var_a]["POS"],
-                                                     self.idx_variant_mapping[idx_var_a]["REF"],
-                                                     self.idx_variant_mapping[idx_var_a]["ALT"][0], ref_samples)
-            variant_b = self.get_closest_ref_variant(self.idx_variant_mapping[idx_var_b]["POS"],
-                                                     self.idx_variant_mapping[idx_var_b]["REF"],
-                                                     self.idx_variant_mapping[idx_var_b]["ALT"][0], ref_samples)
-
-            if variant_a is None or variant_b is None:
-                pbar.update(1)
-                continue
-            # P(B_R|A_R)
-            rr = (np.where((variant_a['gts'] == 0) & (variant_b['gts'] == 0))[0].shape[0] /
-                  np.where((variant_a['gts'] == 0))[0].shape[0])
-            # P(B_A|A_R)
-            ra = (np.where((variant_a['gts'] == 0) & (variant_b['gts'] == 1))[0].shape[0] /
-                  np.where((variant_a['gts'] == 0))[0].shape[0])
-            # P(B_R|A_A)
-            ar = (np.where((variant_a['gts'] == 1) & (variant_b['gts'] == 0))[0].shape[0] /
-                  np.where((variant_a['gts'] == 1))[0].shape[0])
-            # P(B_A|A_A)
-            aa = (np.where((variant_a['gts'] == 1) & (variant_b['gts'] == 1))[0].shape[0] /
-                  np.where((variant_a['gts'] == 1))[0].shape[0])
-            # fill in transition matrix
-            self.transition_matrix[:, :, idx_var_a] = np.array([[rr + 1e-20, ra + 1e-20],
-                                                                [ar + 1e-20, aa + 1e-20]])
-            self.transition_matrix[:, :, idx_var_a] = (
-                self.mirror_transition(self.transition_matrix[:, :, idx_var_a], normalized=True))
-            pbar.update(1)
-        self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
-
-        uncertain_transitions = self.get_uncertain_transitions(self.transition_matrix[:, :,
-                                                               self.phaseable[self.phaseable < self.num_variants - 1]])
-        logging.info(f'Filled in {n_uncertain_transitions - len(uncertain_transitions)}/{n_uncertain_transitions} ' +
-                     'uncertain transitions with population data.')
-
-        if self.output_transition_matrix_pop is not None:
-            np.savez(self.output_transition_matrix_pop, self.transition_matrix)
 
     @staticmethod
     def get_uncertain_transitions(transition_matrix):
@@ -1363,86 +1203,6 @@ class LongHap:
             t3 = t3 / t3.sum(axis=1, keepdims=True)
 
         return t1, t2, new_t1, new_t2, t3
-
-    def update_transition_matrix_considering_adjacent_variants_broader_helper(self, layer_idx, n_preceding,
-                                                                              n_succeeding, normalized=False):
-        """
-        Re-calculate transition probabilities to form and between a sequence of INDELs considering surrounding variants
-        (i.e., including probabilities of distant variants being connected)
-        by calculating the probabilities of all possible paths between the first and last INDEL.
-        The probabilities are then re-scaled by the average number of reads connecting the two variants to get the
-        "posterior" number of reads connecting two variants.
-        :param layer_idx: np.array, variant indices associated with layers
-        :param n_preceding: int, number of preceding variants to consider
-        :param n_succeeding: int, number of succeeding variants to consider
-        :param normalized: boolean, transitions have been normalized
-        """
-        n_layers = layer_idx.shape[0]
-        # get list of all possible haplotypes
-        # Create array of all integers from 0 to 2**n_layers - 1
-        ints = np.arange(2 ** n_layers, dtype=np.uint32)[:, None]
-        # shifts bit to the right for each position and masks out everything but the lowest bit
-        possible_paths = ((ints >> np.arange(n_layers - 1, -1, -1)) & 1).astype(np.uint8)
-
-        # calculate baseline haplotype probs based on previously inferred transition matrices
-        t_mat = self.transition_matrix[:, :, layer_idx[:-1]]
-        t_f = self.mirror_transition(t_mat[:, :, 0], normalized=normalized)
-        t_e = self.mirror_transition(t_mat[:, :, -1], normalized=normalized)
-        t_mat[:, :, 0] = t_f
-        t_mat[:, :, -1] = t_e
-
-        t_mat = np.log(t_mat / t_mat.sum(axis=1, keepdims=True))
-        path_probs = np.sum(t_mat[possible_paths[:, :-1], possible_paths[:, 1:],
-                            np.arange(0, possible_paths.shape[1] - 1)],
-                            axis=1)
-
-        # calculate long-range transition probabilities between all possible pairs of variants and
-        # update path probabilities accordingly
-        for i, idx_a in enumerate(layer_idx[:n_preceding]):
-            for j, idx_b in enumerate(layer_idx[i + 2:]):
-
-                t = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
-
-                t = self.mirror_transition(t, normalized=False)
-                t = t / t.sum(axis=1, keepdims=True)
-                if np.all(t == 0.5):
-                    continue
-                t = np.log(t)
-                path_probs += t[possible_paths[:, i], possible_paths[:, j + i + 2]]
-        for i, idx_a in enumerate(layer_idx[n_preceding:-n_succeeding]):
-            for j, idx_b in enumerate(layer_idx[-n_succeeding:]):
-                if (j + len(layer_idx) - n_succeeding) - (i + n_preceding) < 2:
-                    continue
-                t = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
-
-                t = self.mirror_transition(t, normalized=False)
-                t = t / t.sum(axis=1, keepdims=True)
-                if np.all(t == 0.5):
-                    continue
-                t = np.log(t)
-                path_probs += t[possible_paths[:, i + n_preceding],
-                                possible_paths[:, j + len(layer_idx) - n_succeeding]]
-
-        # calculate posterior transition probabilities
-        for n in range(n_preceding - 1, n_layers - n_succeeding):
-            for i in [0, 1]:
-                mask_i = possible_paths[:, n] == i
-                if np.sum(mask_i) == 0:
-                    self.transition_matrix[i, :, layer_idx[n]] = 1e-300
-                    continue
-                denominator = logsumexp(path_probs[mask_i])
-                for j in [0, 1]:
-                    # sum of probabilities of paths traversing (i, n) and (j, n+1)
-                    # divided by sum of all paths traversing (i, n)
-                    mask_j = possible_paths[:, n + 1] == j
-                    joint_mask = mask_i & mask_j
-                    if np.sum(joint_mask) == 0:
-                        self.transition_matrix[i, j, layer_idx[n]] = 1e-300
-                    else:
-                        numerator = logsumexp(path_probs[joint_mask])
-                        # Rescale probabilities by average allele coverage to get posterior number of reads connecting the two
-                        self.transition_matrix[i, j, layer_idx[n]] = (np.exp(numerator - denominator) *
-                                                                       np.mean(self.allele_coverage) + 1e-300)
 
     def get_new_transition_conditional_on_beliefs(self, beliefs, layer_idx, layer_idx_mapping, n_preceding, n_succeeding):
         """
@@ -1631,47 +1391,6 @@ class LongHap:
         # compute posterior transition probabilities and DAG with long-range edges projected into pairwise transitions
         self.get_new_transition_conditional_on_beliefs(beliefs, layer_idx, layer_idx_mapping, n_preceding,
                                                        n_succeeding)
-
-    def update_transition_matrix_considering_adjacent_variants_broader(self, first_indel, last_indel, n_preceding=2,
-                                                                       n_succeeding=2, normalized=False):
-        """
-        Re-calculate transition probabilities to form and between a sequence of INDELs considering surrounding variants
-        (i.e., including probabilities of distant variants being connected)
-        by calculating the probabilities of all possible paths between the first and last INDEL.
-        The probabilities are then re-scaled by the average number of reads connecting the two variants to get the
-        "posterior" number of reads connecting two variants.
-        :param first_indel: int, index of first indel
-        :param last_indel: int, index of last indel if first_indel == last_indel there is only one indel
-        :param n_preceding: int, number of preceding variants to consider
-        :param n_succeeding: int, number of succeeding variants to consider
-        :param normalized: boolean, transitions have been normalized
-        """
-        # get the number of layers
-        n_layers = last_indel - first_indel + (n_preceding + n_succeeding) + 1
-        # layer indices
-        layer_idx = np.array([self.phaseable[i] for i in range(first_indel - n_preceding,
-                                                               last_indel + n_succeeding + 1)])
-        # process the indels in batches to limit the memory usage
-        # --> keep n_surrounding variants at each end and process 12 indels at a time and then shift by 8
-        # --> 4 indels overlap between successive batches
-        if n_layers > 16:
-            begin_surrounding = layer_idx[:n_preceding]
-            end_surrounding = layer_idx[-n_succeeding:]
-            batch = 0
-            while batch * 8 + 12 <= n_layers - (n_preceding + n_succeeding):
-                batch_layer_idx = np.concatenate([begin_surrounding,
-                                                  layer_idx[n_preceding + batch * 8:
-                                                            np.min([n_preceding + batch * 8 + 12,
-                                                                    n_layers - n_succeeding])],
-                                                  end_surrounding])
-                batch += 1
-                self.update_transition_matrix_considering_adjacent_variants_broader_helper(batch_layer_idx,
-                                                                                           n_preceding,
-                                                                                           n_succeeding,
-                                                                                           normalized)
-        else:
-            self.update_transition_matrix_considering_adjacent_variants_broader_helper(layer_idx, n_preceding,
-                                                                                       n_succeeding, normalized)
 
     def rephase_difficult_variants(self, n_preceding=2, n_succeeding=2, normalized=False, damping=0.0):
         """
@@ -2325,12 +2044,9 @@ def read_phasing(args):
                       max_allele_length=args.max_allele_length, min_allele_count=args.min_allele_count,
                       min_base_quality=args.min_base_quality, seqtech=seqtech, min_mapq=args.min_mapq,
                       flank_snv=flank_snv, flank_indel=flank_indel,
-                      # reference_vcf=args.reference_vcf, reference_samples_file=args.reference_samples,
-                      # maf_thresh=args.maf_thresh, output_transition_matrix_pop=args.output_transition_matrix_pop
                       )
     longhap.infer_variant_transitions()
     longhap.infer_methylation_transitions()
-    # longhap.infer_population_transitions()
     longhap.phase()
     longhap.write_results()
 
@@ -2346,14 +2062,6 @@ def main(argv=None):
     parser.add_argument('-c', '--chrom', help='Chromosome', required=True)
     parser.add_argument('-m', '--methylation_calls', help='Methylation calls from pileup model',
                            required=False, default=None)
-    # parser.add_argument('--reference_vcf', help='Reference VCF used for population phasing',
-    #                        required=False, default=None)
-    # parser.add_argument('--reference_samples',
-    #                        help='Only consider a subset of samples from reference VCF. One sample ID per line',
-    #                        required=False, default=None)
-    # parser.add_argument('--maf_thresh',
-    #                        help='Only consider biallelic variants with MAF greater than this from reference VCF [0.01]',
-    #                        default=0.01, type=float)
     parser.add_argument('--snvs_only', help='Whether to phase SNVs only ["False]',
                            default=False, action='store_true')
     parser.add_argument('--multiallelics', help='Also phase multiallelic variants or not [False]',
@@ -2387,9 +2095,6 @@ def main(argv=None):
     parser.add_argument('--output_transition_matrix_meth', required=False, default=None,
                            help='If provided transition matrix filled in with methylation data will be saved to this '
                                 'file as numpy array (.npz). Allows faster re-runs.')
-    # parser.add_argument('--output_transition_matrix_pop', required=False, default=None,
-    #                        help='If provided transition matrix filled in with population data will be saved to this '
-    #                             'file as numpy array (.npz). Allows faster re-runs.')
     parser.add_argument('--output_read_states', required=False, default=None,
                            help='If provided read states will be saved to this file as json. '
                                 'Allows faster re-runs.')

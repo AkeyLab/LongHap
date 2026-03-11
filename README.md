@@ -29,12 +29,13 @@ LongHap's only requirements are Python >= 3.12 with the following packages insta
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
-LongHap can be installed from PyPI:
+#### Installation with pip (recommend)
 ```commandline
 pip install longhap
 ```
 
-Alternatively, all dependencies can be installed using the provided `longhap.yaml` file with conda:
+#### Installation from github
+All Python dependencies can be installed using the provided `longhap.yaml` file with conda:
 ```commandline
 git clone https://github.com/AkeyLab/LongHap.git
 cd LongHap/
@@ -225,14 +226,16 @@ Below we provide the run times for phasing chromosome 1 of HG002 using PacBio Hi
 
 | Data type     | Coverage | Read length N50 | LongHap Mode | Time (hh:mm:ss) | Memory (Gb) |
 |---------------|----------|------------------|--------------|-----------------|-------------|
-| PacBio HiFi   | 38x      | 18 kb           | Sequence only | 00:04:19        | 2.1         |
-| PacBio HiFi   | 38x      | 18 kb           | Sequence + Methylation | 00:06:05        | 9.5         |
-| ONT R10.4.1   | 45x      | 29 kb           | Sequence only | 00:12:34        | 3.1         |
-| ONT R10.4.1   | 45x      | 29 kb           | Sequence + Methylation | 00:34:12        | 6.7         |
-| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence only | 00:13:22        | 2.9         |
-| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence + Methylation | 00:20:33        | 7.5         |
+| PacBio HiFi   | 38x      | 18 kb           | Sequence only | 00:04:18        | 1.2         |
+| PacBio HiFi   | 38x      | 18 kb           | Sequence + Methylation | 00:06:11        | 6.1         |
+| ONT R10.4.1   | 45x      | 29 kb           | Sequence only | 00:15:47        | 1.5         |
+| ONT R10.4.1   | 45x      | 29 kb           | Sequence + Methylation | 00:33:36        | 6.4         |
+| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence only | 00:16:06        | 1.3         |
+| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence + Methylation | 00:17:43        | 7.2         |
 
 ### Citation
+
+Aaron Pfennig and Joshua M. Akey, Harnessing methylation signals inherent in long-read sequencing data for improved variant phasing, *bioRxiv*, 2026 
 
 ### Contact
 
