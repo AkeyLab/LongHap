@@ -1,7 +1,7 @@
 import glob
 
 configfile: 'config/config.yaml'
-longhap_path =  '~/LongHap/longhap.py'
+longhap_path = '~/LongHap/longhap.py'
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']

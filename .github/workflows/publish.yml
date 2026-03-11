@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -26,8 +26,25 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Test pip install from built wheel
+        run: |
+          pip install dist/*.whl
+          longhap --help
+
+      - name: Test conda install from source
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: longhap
+          environment-file: longhap.yaml
+
+      - name: Test longhap via conda environment
+        shell: bash -el {0}
+        run: |
+          conda activate longhap
+          ./longhap.py --help
+
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist/
@@ -38,10 +55,24 @@ jobs:
     environment: pypi
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  test-uvx:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Test uvx longhap
+        run: uvx longhap --help

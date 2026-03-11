@@ -29,7 +29,14 @@ LongHap's only requirements are Python >= 3.12 with the following packages insta
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
-#### Installation with pip (recommend)
+After it is installed, you should be able to run `longhap --help`.
+
+#### Quick start with uvx (no installation needed)
+```commandline
+uvx longhap --help
+```
+
+#### Installation with pip
 ```commandline
 pip install longhap
 ```
@@ -41,7 +48,7 @@ git clone https://github.com/AkeyLab/LongHap.git
 cd LongHap/
 conda env create -f longhap.yaml
 conda activate longhap
-pip install .
+./longhap.py --help
 ```
 
 **Note for macOS users:** Some dependencies (e.g., `parasail`, `cyvcf2`) require C build tools. If installation fails, install the following via Homebrew first:
@@ -51,7 +58,7 @@ brew install autoconf automake libtool
 
 ### Usage
 
-LongHap takes the following files as inputs: 
+LongHap takes the following files as inputs:
 - A VCF file with variant calls
 - A BAM file with aligned reads
 - Reference fasta file
@@ -59,8 +66,33 @@ LongHap takes the following files as inputs:
 
 If only a VCF and a BAM file are provided, LongHap will phase variants based on sequence information alone, similarly to WhatsHap, HapCUT2, or LongPhase. If a BED file with methylation calls is provided, LongHap will additionally leverage methylation information to phase variants that could not be phased based on sequence information alone.
 
+If you installed LongHap with `pip install longhap` or from GitHub, you can run it directly with `longhap`. Alternatively, you can use `uvx longhap` to run it without installing — [uv](https://docs.astral.sh/uv/) will automatically fetch the package and its dependencies into a temporary environment. Both approaches are shown in the examples below.
+
 #### Variant phasing based on sequence information alone:
 
+If installed with pip
+```commandline
+longhap \
+    --vcf input_variants.vcf \
+    --bam aligned.pacbio.bam \
+    --reference reference.fasta \
+    --chrom chr1 \
+    --pacbio \
+    -o phased_variants.vcf.gz
+```
+
+Or with uv:
+```commandline
+uvx longhap \
+    --vcf input_variants.vcf \
+    --bam aligned.pacbio.bam \
+    --reference reference.fasta \
+    --chrom chr1 \
+    --pacbio \
+    -o phased_variants.vcf.gz
+```
+
+Or with:
 ```commandline
 ./longhap.py \
     --vcf input_variants.vcf \
@@ -71,10 +103,23 @@ If only a VCF and a BAM file are provided, LongHap will phase variants based on 
     -o phased_variants.vcf.gz
 ```
 
+
 #### Variant phasing based on sequence and methylation information:
 
 ```commandline
-./longhap.py \
+longhap \
+    --vcf input_variants.vcf \
+    --bam aligned.pacbio.bam \
+    --reference reference.fasta \
+    --chrom chr1 \
+    --methylation_calls methylation_calls.bed \
+    --pacbio \
+    -o phased_variants.vcf.gz
+```
+
+Or with uv:
+```commandline
+uvx longhap \
     --vcf input_variants.vcf \
     --bam aligned.pacbio.bam \
     --reference reference.fasta \
@@ -96,8 +141,8 @@ To exclude bases covering heterozygous variants with a base quality below a cert
 
 #### The complete list of options
 ```
-./longhap.py -h
-usage: LongHap.py [-h] --vcf VCF -b BAM -r REFERENCE -c CHROM [-m METHYLATION_CALLS] [--snvs_only] [--multiallelics] [--ont] [--pacbio] [--max_allele_length MAX_ALLELE_LENGTH] [--min_allele_count MIN_ALLELE_COUNT]
+longhap -h
+usage: longhap [-h] --vcf VCF -b BAM -r REFERENCE -c CHROM [-m METHYLATION_CALLS] [--snvs_only] [--multiallelics] [--ont] [--pacbio] [--max_allele_length MAX_ALLELE_LENGTH] [--min_allele_count MIN_ALLELE_COUNT]
                   [--min_base_quality MIN_BASE_QUALITY] [--min_mapq MIN_MAPQ] [--flank_snv FLANK_SNV] [--flank_indel FLANK_INDEL] -o OUTPUT_VCF [--output_bam OUTPUT_BAM] [--output_read_assignments OUTPUT_READ_ASSIGNMENTS]
                   [--output_blocks OUTPUT_BLOCKS] [--output_transition_matrix OUTPUT_TRANSITION_MATRIX] [--output_transition_matrix_meth OUTPUT_TRANSITION_MATRIX_METH] [--output_read_states OUTPUT_READ_STATES]
                   [--output_variant_read_mapping OUTPUT_VARIANT_READ_MAPPING] [--output_allele_coverage OUTPUT_ALLELE_COVERAGE] [--output_unphaseable_variants OUTPUT_UNPHASEABLE_VARIANTS]
