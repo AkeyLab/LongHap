@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "longhap"
-version = "0.1.1"
+version = "0.1.2"
 description = "Read-based variant phasing with methylation integration for long-read sequencing"
 readme = "README.md"
 license = "MIT"
