@@ -1,3 +1,4 @@
-# Build artifacts
+# Ignore build artifacts
 *egg-info/
 __pycache__/
+build/
