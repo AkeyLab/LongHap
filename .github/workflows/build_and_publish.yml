@@ -39,6 +39,7 @@ jobs:
         with:
           activate-environment: longhap
           environment-file: longhap.yaml
+          conda-remove-defaults: "true"
 
       - name: Test longhap via conda environment
         shell: bash -el {0}
