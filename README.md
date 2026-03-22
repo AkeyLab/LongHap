@@ -280,7 +280,7 @@ Below we provide the run times for phasing chromosome 1 of HG002 using PacBio Hi
 
 ### Citation
 
-Aaron Pfennig and Joshua M. Akey, Harnessing methylation signals inherent in long-read sequencing data for improved variant phasing, *bioRxiv*, 2026 
+Aaron Pfennig and Joshua M. Akey, Harnessing methylation signals inherent in long-read sequencing data for improved variant phasing, *bioRxiv*, 2026, [https://doi.org/10.64898/2026.03.11.710820](https://doi.org/10.64898/2026.03.11.710820)
 
 ### Contact
 
