@@ -16,10 +16,10 @@ The workflow also assumes that any aligner you're chosing to use (`minimap2`, `w
 
 To run the workflow, simply execute:
 ```commandline
-snakemake --profile profiles/ --use-conda
+snakemake -s Snakefile --profile profiles/ --use-conda
 ```
 
-The figures can then be reproduced using Jupyter Notebook (`benchmark_longhap.ipynb`).
+The figures can then be reproduced using Jupyter Notebook (`benchmark_longhap.ipynb` and `plot_locus.ipynb`).
 
 ### Population-level analysis
 Additionally, we applied LongHap to 6 additional population-level samples using HiFi data from the HPRC:
@@ -38,3 +38,15 @@ We retrieved the corresponding assemblies:
 - HG01099 (s3://human-pangenomics/submissions/DC27718F-5F38-43B0-9A78-270F395F13E8--INT_ASM_PRODUCTION/HG01099/assemblies/freeze_2/HG01099_mat_hprc_r2_v1.0.1.fa.gz, s3://human-pangenomics/submissions/DC27718F-5F38-43B0-9A78-270F395F13E8--INT_ASM_PRODUCTION/HG01099/assemblies/freeze_2/HG01099_pat_hprc_r2_v1.0.1.fa.gz)
 - HG02615 (s3://human-pangenomics/submissions/DC27718F-5F38-43B0-9A78-270F395F13E8--INT_ASM_PRODUCTION/HG02615/assemblies/freeze_2/HG02615_mat_hprc_r2_v1.0.1.fa.gz, s3://human-pangenomics/submissions/DC27718F-5F38-43B0-9A78-270F395F13E8--INT_ASM_PRODUCTION/HG02615/assemblies/freeze_2/HG02615_pat_hprc_r2_v1.0.1.fa.gz)
 - HG02723 (s3://human-pangenomics/submissions/DC27718F-5F38-43B0-9A78-270F395F13E8--INT_ASM_PRODUCTION/HG02723/assemblies/freeze_2/HG02723_mat_hprc_r2_v1.0.1.fa.gz, s3://human-pangenomics/submissions/DC27718F-5F38-43B0-9A78-270F395F13E8--INT_ASM_PRODUCTION/HG02723/assemblies/freeze_2/HG02723_pat_hprc_r2_v1.0.1.fa.gz)
+
+To analyze these samples, you have manually download the data, update the paths at the top of each Snakemake file, and then run:
+```commandline
+snakemake -s full_longhap_pipeline.smk --profile profiles/ --use-conda
+```
+
+and to analyze LongHap's phasing, run:
+```commandline
+snakemake -s analyze_longhap_phasing.smk --profile profiles/ --use-conda
+```
+
+The figures can be reproduced using Jupyter Notebook (`population_analyses.ipynb`).
