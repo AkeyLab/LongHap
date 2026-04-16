@@ -23,11 +23,11 @@ seq_tech = ['hifi']
 
 rule all:
     input:
-        expand(base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz.tbi",
+        expand(base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz.tbi",
                chrom=autosomes,  phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sample=samples),
-        expand(base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats.tsv",
+        expand(base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats.tsv",
                chrom=autosomes, phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sample=samples),
-        expand(base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats_complex_variants.tsv",
+        expand(base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats_complex_variants.tsv",
                chrom=autosomes, phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sample=samples),
 
 rule download_reference_genome:
@@ -354,8 +354,8 @@ rule merge_snvs_svs:
         sniffles=base_results_dir + "{sample}/sniffles/sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf = base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz",
-        tbi = base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz.tbi"
+        vcf = base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz",
+        tbi = base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz.tbi"
     conda:
         "envs/samtools.yaml"
     retries: 3
@@ -397,21 +397,21 @@ def get_longhap_options(wildcards):
 
 rule run_longhap_meth_phase_indels:
     input:
-        vcf=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz",
-        tbi=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz.tbi",
+        vcf=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz",
+        tbi=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz.tbi",
         bam=base_results_dir + "{sample}/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
         methylation=base_results_dir + "{sample}/alignments/{seq_tech}_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
     output:
-        vcf=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_phased.vcf.gz",
-        blocks=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_blocks.bed",
-        npz=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_transition_mat_variants.npz",
-        npz_meth=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_transition_mat_meth.npz",
-        read_states=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_read_states.json",
-        meth=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_diff_meth_sites.tab",
-        variant_read_mapping=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_variant_read_mapping.json",
-        unphaseable_variants=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_unphaseable_variants.npz",
-        allele_coverage=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_allele_coverage.npz"
+        vcf=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_phased.vcf.gz",
+        blocks=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_blocks.bed",
+        npz=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_transition_mat_variants.npz",
+        npz_meth=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_transition_mat_meth.npz",
+        read_states=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_read_states.json",
+        meth=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_diff_meth_sites.tab",
+        variant_read_mapping=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_variant_read_mapping.json",
+        unphaseable_variants=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_unphaseable_variants.npz",
+        allele_coverage=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth_allele_coverage.npz"
     conda:
         "envs/longhap.yaml"
     params:
@@ -426,7 +426,7 @@ rule run_longhap_meth_phase_indels:
     resources:
         runtime=30,
         mem_mb=16 * 1024
-    benchmark: base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth.benchmark"
+    benchmark: base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_meth.benchmark"
     shell:
         "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
@@ -438,18 +438,18 @@ rule run_longhap_meth_phase_indels:
 
 rule run_longhap_phase_indels:
     input:
-        vcf=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz",
-        tbi=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz.tbi",
+        vcf=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz",
+        tbi=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.vcf.gz.tbi",
         bam=base_results_dir + "{sample}/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_phased.vcf.gz",
-        blocks=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_blocks.bed",
-        npz=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_transition_mat.npz",
-        read_states=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_read_states.json",
-        variant_read_mapping=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_variant_read_mapping.json",
-        unphaseable_variants=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_unphaseable_variants.npz",
-        allele_coverage=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_allele_coverage.npz"
+        vcf=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_phased.vcf.gz",
+        blocks=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_blocks.bed",
+        npz=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_transition_mat.npz",
+        read_states=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_read_states.json",
+        variant_read_mapping=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_variant_read_mapping.json",
+        unphaseable_variants=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_unphaseable_variants.npz",
+        allele_coverage=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap_allele_coverage.npz"
     conda:
         "envs/longhap.yaml"
     params:
@@ -464,7 +464,7 @@ rule run_longhap_phase_indels:
     resources:
         runtime=30,
         mem_mb=16 * 1024
-    benchmark: base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap.benchmark"
+    benchmark: base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.longhap.benchmark"
     shell:
         "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
@@ -474,9 +474,9 @@ rule run_longhap_phase_indels:
 
 rule index_phased_vcf:
     input:
-        vcf=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz"
+        vcf=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz"
     output:
-        base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz.tbi"
+        base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz.tbi"
     conda:
         "envs/samtools.yaml"
     resources:
@@ -492,10 +492,10 @@ rule index_phased_vcf:
 
 rule run_whatshap_stats:
     input:
-        base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz"
+        base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz"
     output:
-        gtf=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats.gtf",
-        tsv=base_results_dir+ "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats.tsv"
+        gtf=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats.gtf",
+        tsv=base_results_dir+ "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats.tsv"
     conda:
         "envs/whatshap.yaml"
     resources:
@@ -509,10 +509,10 @@ rule run_whatshap_stats:
 
 rule run_whatshap_stats_complex:
     input:
-        base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz"
+        base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.vcf.gz"
     output:
-        gtf=base_results_dir + "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats_complex_variants.gtf",
-        tsv=base_results_dir+ "{sample}/longhap/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats_complex_variants.tsv"
+        gtf=base_results_dir + "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats_complex_variants.gtf",
+        tsv=base_results_dir+ "{sample}/deepvariant_sniffles_{seq_tech}_hs1.{aligner}.chr{chrom}.{phasing_method}_phased.stats_complex_variants.tsv"
     conda:
         "envs/whatshap.yaml"
     resources:
