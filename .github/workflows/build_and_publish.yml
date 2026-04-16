@@ -1,6 +1,10 @@
-name: Publish to PyPI
+name: Build and publish to PyPI
 
 on:
+  push:
+    branches:
+      - main
+      - dev
   release:
     types: [published]
 
@@ -28,20 +32,24 @@ jobs:
         run: |
           pip install dist/*.whl
           longhap --help
+          longhap --version
 
       - name: Test conda install from source
         uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: longhap
           environment-file: longhap.yaml
+          conda-remove-defaults: "true"
 
       - name: Test longhap via conda environment
         shell: bash -el {0}
         run: |
           conda activate longhap
           ./longhap.py --help
+          ./longhap.py --version
 
       - name: Upload build artifacts
+        if: github.event_name == 'release'
         uses: actions/upload-artifact@v6
         with:
           name: dist
@@ -51,6 +59,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
+    if: github.event_name == 'release'
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v8
@@ -64,6 +73,7 @@ jobs:
   test-uvx:
     needs: publish
     runs-on: ubuntu-latest
+    if: github.event_name == 'release'
     steps:
       - uses: actions/setup-python@v6
         with:
