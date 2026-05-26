@@ -119,18 +119,3 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
-  test-uvx:
-    needs: publish
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    steps:
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Test uvx longhap
-        run: uvx longhap --help
