@@ -42,9 +42,10 @@ Repository = "https://github.com/AkeyLab/LongHap"
 
 [project.scripts]
 longhap = "longhap:main"
+longhap_fetch_example_data = "longhap_fetch:main"
 
 [tool.setuptools]
-py-modules = ["longhap"]
+py-modules = ["longhap", "longhap_fetch"]
 
 [tool.setuptools.dynamic]
 version = {attr = "longhap.__version__"}
