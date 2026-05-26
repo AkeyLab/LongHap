@@ -4,7 +4,7 @@
 
 - [Description of LongHap](#description-of-longhap)
 - [Installation](#installation)
-- [Usage](#usage)
+- [Exemplary Usage](#exemplary-usage)
 - [Outputs](#outputs)
 - [Preparation of Inputs](#preparation-of-inputs)
 - [Comparison to other phasing tools](#comparison-to-other-phasing-tools)
@@ -56,7 +56,7 @@ conda activate longhap
 brew install autoconf automake libtool
 ```
 
-### Usage
+### Exemplary Usage
 
 LongHap takes the following files as inputs:
 - A VCF file with variant calls
@@ -70,37 +70,30 @@ If you installed LongHap with `pip install longhap` or from GitHub, you can run 
 
 #### Variant phasing based on sequence information alone:
 
+We provided some toy data for chromosome 1 (chr1:10,000,000-15,000,000) of HG002 in the `example/` directory. You can run LongHap on this data like this:
+
 If installed with pip
 ```commandline
 longhap \
-    --vcf input_variants.vcf \
-    --bam aligned.pacbio.bam \
-    --reference reference.fasta \
+    --vcf example/deepvariant.vcf.gz \
+    --bam example/pacbio.bam \
+    --reference example/toy_reference.fa \
     --chrom chr1 \
     --pacbio \
-    -o phased_variants.vcf.gz
+    -o example/phased_variants.vcf.gz \
+    --verbose
 ```
 
 Or with uv:
 ```commandline
 uvx longhap \
-    --vcf input_variants.vcf \
-    --bam aligned.pacbio.bam \
-    --reference reference.fasta \
+    --vcf example/deepvariant.vcf.gz  \
+    --bam example/pacbio.bam \
+    --reference example/toy_reference.fa \
     --chrom chr1 \
     --pacbio \
-    -o phased_variants.vcf.gz
-```
-
-Or with:
-```commandline
-./longhap.py \
-    --vcf input_variants.vcf \
-    --bam aligned.pacbio.bam \
-    --reference reference.fasta \
-    --chrom chr1 \
-    --pacbio \
-    -o phased_variants.vcf.gz
+    -o example/phased_variants.vcf.gz \
+    --verbose
 ```
 
 
@@ -108,25 +101,27 @@ Or with:
 
 ```commandline
 longhap \
-    --vcf input_variants.vcf \
-    --bam aligned.pacbio.bam \
-    --reference reference.fasta \
+    --vcf example/deepvariant.vcf.gz \
+    --bam example/pacbio.bam \
+    --methylation_calls example/methylation.bed \
+    --reference example/toy_reference.fa \
     --chrom chr1 \
-    --methylation_calls methylation_calls.bed \
     --pacbio \
-    -o phased_variants.vcf.gz
+    -o example/phased_variants.vcf.gz \
+    --verbose
 ```
 
 Or with uv:
 ```commandline
 uvx longhap \
-    --vcf input_variants.vcf \
-    --bam aligned.pacbio.bam \
-    --reference reference.fasta \
+    --vcf example/deepvariant.vcf.gz  \
+    --bam example/pacbio.bam \
+    --methylation_calls example/methylation.bed \
+    --reference example/toy_reference.fa \
     --chrom chr1 \
-    --methylation_calls methylation_calls.bed \
     --pacbio \
-    -o phased_variants.vcf.gz
+    -o example/phased_variants.vcf.gz \
+    --verbose
 ```
 
 #### General phasing options  
@@ -213,13 +208,13 @@ LongHap stores the phase information in the `GT` field and the phase block coord
 
 
 ```
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	HG002
-chr1	13029010	.	A	T	40	PASS	.	GT:GQ:DP:AD:VAF:PL:PS	1|0:40:28:14,14:0.5:39,0,53:45
-chr1	13029690	.	T	C	57.8	PASS	.	GT:GQ:DP:AD:VAF:PL	1/1:54:28:0,28:1:57,56,0
-chr1	13030289	.	T	G	57	PASS	.	GT:GQ:DP:AD:VAF:PL	1/1:54:30:0,30:1:56,56,0
-chr1	13030367	.	T	C	38.6	PASS	.	GT:GQ:DP:AD:VAF:PL:PS	1|0:38:30:16,14:0.466667:38,0,52:45
-chr1	13030751	.	C	CCT	33.4	PASS	.	GT:GQ:DP:AD:VAF:PL:PS	0|1:32:29:14,15:0.517241:33,0,37:45
-chr1	13030882	.	T	G	37.6	PASS	.	GT:GQ:DP:AD:VAF:PL:PS	1|0:37:29:15,14:0.482759:37,0,53:45
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	default
+chr1	13029010	.	A	T	40	PASS	.	GT:GQ:DP:AD:VAF:MID:PL:PS	1|0:40:28:14,14:0.5:small_model:39,0,53:14
+chr1	13029690	.	T	C	57.8	PASS	.	GT:GQ:DP:AD:VAF:MID:PL	1/1:54:28:0,28:1:small_model:57,56,0
+chr1	13030289	.	T	G	57	PASS	.	GT:GQ:DP:AD:VAF:MID:PL	1/1:54:30:0,30:1:small_model:56,56,0
+chr1	13030367	.	T	C	38.6	PASS	.	GT:GQ:DP:AD:VAF:MID:PL:PS	1|0:38:30:16,14:0.466667:small_model:38,0,52:14
+chr1	13030751	.	C	CCT	33.4	PASS	.	GT:GQ:DP:AD:VAF:MID:PL:PS	0|1:32:29:14,15:0.517241:small_model:33,0,37:14
+chr1	13030882	.	T	G	37.6	PASS	.	GT:GQ:DP:AD:VAF:MID:PL:PS	1|0:37:29:15,14:0.482759:small_model:37,0,53:14
 ```
 
 #### Additional outputs
