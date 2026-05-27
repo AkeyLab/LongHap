@@ -34,6 +34,29 @@ jobs:
           longhap --help
           longhap --version
 
+      - name: Test pip install - sequence-only phasing
+        run: |
+          longhap \
+            --vcf example/deepvariant.vcf.gz \
+            --bam example/pacbio.bam \
+            --reference example/toy_reference.fa \
+            --chrom chr1 \
+            --pacbio \
+            -o example/phased_variants_pip_seq.vcf.gz \
+            --verbose
+
+      - name: Test pip install - sequence and methylation phasing
+        run: |
+          longhap \
+            --vcf example/deepvariant.vcf.gz \
+            --bam example/pacbio.bam \
+            --methylation_calls example/methylation.bed \
+            --reference example/toy_reference.fa \
+            --chrom chr1 \
+            --pacbio \
+            -o example/phased_variants_pip_meth.vcf.gz \
+            --verbose
+
       - name: Test conda install from source
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -47,6 +70,33 @@ jobs:
           conda activate longhap
           ./longhap.py --help
           ./longhap.py --version
+
+      - name: Test conda install - sequence-only phasing
+        shell: bash -el {0}
+        run: |
+          conda activate longhap
+          ./longhap.py \
+            --vcf example/deepvariant.vcf.gz \
+            --bam example/pacbio.bam \
+            --reference example/toy_reference.fa \
+            --chrom chr1 \
+            --pacbio \
+            -o example/phased_variants_conda_seq.vcf.gz \
+            --verbose
+
+      - name: Test conda install - sequence and methylation phasing
+        shell: bash -el {0}
+        run: |
+          conda activate longhap
+          ./longhap.py \
+            --vcf example/deepvariant.vcf.gz \
+            --bam example/pacbio.bam \
+            --methylation_calls example/methylation.bed \
+            --reference example/toy_reference.fa \
+            --chrom chr1 \
+            --pacbio \
+            -o example/phased_variants_conda_meth.vcf.gz \
+            --verbose
 
       - name: Upload build artifacts
         if: github.event_name == 'release'
@@ -69,18 +119,3 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
-  test-uvx:
-    needs: publish
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    steps:
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Test uvx longhap
-        run: uvx longhap --help

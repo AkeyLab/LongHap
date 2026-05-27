@@ -64,15 +64,42 @@ LongHap takes the following files as inputs:
 - Reference fasta file
 - (Optional) A BED file with methylation calls
 
-If only a VCF and a BAM file are provided, LongHap will phase variants based on sequence information alone, similarly to WhatsHap, HapCUT2, or LongPhase. If a BED file with methylation calls is provided, LongHap will additionally leverage methylation information to phase variants that could not be phased based on sequence information alone.
+If only a VCF and a BAM file are provided, LongHap will phase variants based on
+sequence information alone, similarly to WhatsHap, HapCUT2, or LongPhase. If a
+BED file with methylation calls is provided, LongHap will additionally leverage
+methylation information to phase variants that could not be phased based on
+sequence information alone.
 
-If you installed LongHap with `pip install longhap` or from GitHub, you can run it directly with `longhap`. Alternatively, you can use `uvx longhap` to run it without installing — [uv](https://docs.astral.sh/uv/) will automatically fetch the package and its dependencies into a temporary environment. Both approaches are shown in the examples below.
+If you installed LongHap with `pip install longhap` or from GitHub, you can run
+it directly with `longhap`. Alternatively, you can use `uvx longhap` to run it
+without installing — [uv](https://docs.astral.sh/uv/) will automatically fetch
+the package and its dependencies into a temporary environment. The examples below
+only show `longhap`, but you can do `uvx longhap` instead.
+
+#### Fetching the example data
+
+We provide toy data for chromosome 1 (chr1:10,000,000-15,000,000) of HG002 to
+try out LongHap. If you cloned the repository, the data is already in the
+`example/` directory. Otherwise, you can download it with the included
+`longhap_fetch_example_data` command:
+
+```commandline
+longhap_fetch_example_data
+```
+
+Or, if using `uvx`:
+
+```commandline
+uvx --from longhap longhap_fetch_example_data
+```
+
+This will download the latest example data from GitHub into an `example/`
+sub-directory in your current working directory.
 
 #### Variant phasing based on sequence information alone:
 
-We provided some toy data for chromosome 1 (chr1:10,000,000-15,000,000) of HG002 in the `example/` directory. You can run LongHap on this data like this:
+You can run LongHap on the example data like this :
 
-If installed with pip
 ```commandline
 longhap \
     --vcf example/deepvariant.vcf.gz \
@@ -83,22 +110,11 @@ longhap \
     -o example/phased_variants.vcf.gz \
     --verbose
 ```
-
-Or with uv:
-```commandline
-uvx longhap \
-    --vcf example/deepvariant.vcf.gz  \
-    --bam example/pacbio.bam \
-    --reference example/toy_reference.fa \
-    --chrom chr1 \
-    --pacbio \
-    -o example/phased_variants.vcf.gz \
-    --verbose
-```
-
 
 #### Variant phasing based on sequence and methylation information:
 
+Methylation data can be used for phasing with the `--methylation_calls` flag :
+
 ```commandline
 longhap \
     --vcf example/deepvariant.vcf.gz \
@@ -111,18 +127,6 @@ longhap \
     --verbose
 ```
 
-Or with uv:
-```commandline
-uvx longhap \
-    --vcf example/deepvariant.vcf.gz  \
-    --bam example/pacbio.bam \
-    --methylation_calls example/methylation.bed \
-    --reference example/toy_reference.fa \
-    --chrom chr1 \
-    --pacbio \
-    -o example/phased_variants.vcf.gz \
-    --verbose
-```
 
 #### General phasing options  
 
