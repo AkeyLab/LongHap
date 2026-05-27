@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build:
@@ -108,7 +107,11 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: 
+      name: pypi
+      url: https://pypi.org/p/longhap
+    permissions:
+      id-token: write
     if: github.event_name == 'release'
     steps:
       - name: Download build artifacts
