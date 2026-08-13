@@ -22,26 +22,26 @@ seq_tech = ['hifi', 'ont_r10.4.1_dorado', 'ul_ont_r10.4.1_dorado']
 
 rule all:
     input:
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
                aligner=aligner, chrom=autosomes + sex_chromosomes),
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi",
                chrom=autosomes, variant_type=['snps', 'snps_indels'], phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.{sites}.bed",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.{sites}.bed",
                chrom=autosomes, variant_type=['snps', 'snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.{sites}.tab",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.{sites}.tab",
                chrom=autosomes, variant_type=['snps', 'snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors_complex_variants.{sites}.bed",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors_complex_variants.{sites}.bed",
                chrom=autosomes, variant_type=['snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.{sites}.tab",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.{sites}.tab",
                chrom=autosomes, variant_type=['snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv",
                chrom=autosomes, variant_type=['snps', 'snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
-        expand(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv",
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv",
                chrom=autosomes, variant_type=['snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
 
@@ -290,8 +290,8 @@ rule run_deepvariant:
         par= ref_dir + par_regions_bed_url.split('/')[-1],
         depth_y=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.depth_Y_chrom.txt"
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.vcf.gz.tbi",
         tmp=temp(directory(base_results_dir + "HG002/deepvariant/tmp_deepvariant_{aligner}_{chrom}"))
     params:
         cmd=lambda wildcards, input, output: get_deepvariant_cmd(wildcards, input, output)
@@ -309,10 +309,10 @@ rule run_deepvariant:
 
 rule filter_variants:
     input:
-        base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.vcf.gz"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.vcf.gz"
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi"
     resources:
         runtime=30,
         mem_mb=4 * 1024
@@ -326,12 +326,12 @@ rule filter_variants:
 
 rule get_snvs:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf = base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
-        tbi = base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi"
+        vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
+        tbi = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi"
     conda:
         "envs/samtools.yaml"
     resources:
@@ -392,13 +392,13 @@ rule filter_sniffles:
 
 rule get_snvs_indels:
     input:
-        dv=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
-        dv_tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
+        dv=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
+        dv_tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz.tbi",
         sniffles=base_results_dir + "HG002/sniffles/sniffles_hifi_hs1.{aligner}.chr{chrom}.filtered.vcf.gz",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf = base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
-        tbi = base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi"
+        vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        tbi = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi"
     conda:
         "envs/samtools.yaml"
     resources:
@@ -436,21 +436,21 @@ def get_longhap_options(wildcards):
 
 rule run_longhap_meth_phase:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
         methylation=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_phased.vcf.gz",
-        blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_blocks.bed",
-        npz=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_transition_mat_variants.npz",
-        npz_meth=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_transition_mat_meth.npz",
-        read_states=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_read_states.json",
-        meth=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_diff_meth_sites.tab",
-        variant_read_mapping=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_variant_read_mapping.json",
-        unphaseable_variants= base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_unphaseable_variants.npz",
-        allele_coverage= base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_allele_coverage.npz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_phased.vcf.gz",
+        blocks=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_blocks.bed",
+        npz=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_transition_mat_variants.npz",
+        npz_meth=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_transition_mat_meth.npz",
+        read_states=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_read_states.json",
+        meth=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_diff_meth_sites.tab",
+        variant_read_mapping=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_variant_read_mapping.json",
+        unphaseable_variants= base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_unphaseable_variants.npz",
+        allele_coverage= base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth_allele_coverage.npz"
     conda:
         "envs/longhap.yaml"
     params:
@@ -464,7 +464,7 @@ rule run_longhap_meth_phase:
     resources:
         runtime=30,
         mem_mb=16 * 1024
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_meth.benchmark"
     shell:
         "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
@@ -475,21 +475,21 @@ rule run_longhap_meth_phase:
 
 rule run_longhap_meth_phase_indels:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
         methylation=base_results_dir + "HG002/alignments/hifi_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_phased.vcf.gz",
-        blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_blocks.bed",
-        npz=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_transition_mat_variants.npz",
-        npz_meth=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_transition_mat_meth.npz",
-        read_states=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_read_states.json",
-        meth=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_diff_meth_sites.tab",
-        variant_read_mapping=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_variant_read_mapping.json",
-        unphaseable_variants=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_unphaseable_variants.npz",
-        allele_coverage=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_allele_coverage.npz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_phased.vcf.gz",
+        blocks=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_blocks.bed",
+        npz=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_transition_mat_variants.npz",
+        npz_meth=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_transition_mat_meth.npz",
+        read_states=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_read_states.json",
+        meth=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_diff_meth_sites.tab",
+        variant_read_mapping=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_variant_read_mapping.json",
+        unphaseable_variants=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_unphaseable_variants.npz",
+        allele_coverage=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_allele_coverage.npz"
     conda:
         "envs/longhap.yaml"
     params:
@@ -503,7 +503,7 @@ rule run_longhap_meth_phase_indels:
     resources:
         runtime=30,
         mem_mb=16 * 1024
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth.benchmark"
     shell:
         "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
@@ -515,18 +515,18 @@ rule run_longhap_meth_phase_indels:
 
 rule run_longhap_phase:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_phased.vcf.gz",
-        blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_blocks.bed",
-        npz=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_transition_mat.npz",
-        read_states=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_read_states.json",
-        variant_read_mapping=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_variant_read_mapping.json",
-        unphaseable_variants=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_unphaseable_variants.npz",
-        allele_coverage=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_allele_coverage.npz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_phased.vcf.gz",
+        blocks=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_blocks.bed",
+        npz=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_transition_mat.npz",
+        read_states=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_read_states.json",
+        variant_read_mapping=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_variant_read_mapping.json",
+        unphaseable_variants=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_unphaseable_variants.npz",
+        allele_coverage=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap_allele_coverage.npz"
     conda:
         "envs/longhap.yaml"
     params:
@@ -540,7 +540,7 @@ rule run_longhap_phase:
     resources:
         runtime=30,
         mem_mb=16 * 1024
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longhap.benchmark"
     shell:
         "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
@@ -550,18 +550,18 @@ rule run_longhap_phase:
 
 rule run_longhap_phase_indels:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_phased.vcf.gz",
-        blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_blocks.bed",
-        npz=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_transition_mat.npz",
-        read_states=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_read_states.json",
-        variant_read_mapping=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_variant_read_mapping.json",
-        unphaseable_variants=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_unphaseable_variants.npz",
-        allele_coverage=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_allele_coverage.npz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_phased.vcf.gz",
+        blocks=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_blocks.bed",
+        npz=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_transition_mat.npz",
+        read_states=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_read_states.json",
+        variant_read_mapping=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_variant_read_mapping.json",
+        unphaseable_variants=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_unphaseable_variants.npz",
+        allele_coverage=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_allele_coverage.npz"
     conda:
         "envs/longhap.yaml"
     params:
@@ -575,7 +575,7 @@ rule run_longhap_phase_indels:
     resources:
         runtime=30,
         mem_mb=16 * 1024
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap.benchmark"
     shell:
         "{params.longhap_path} --vcf {input.vcf} -b {input.bam} -c {params.chrom} -r {input.ref} "
         "-o {output.vcf} --output_blocks {output.blocks} --output_transition_matrix {output.npz} "
@@ -585,17 +585,17 @@ rule run_longhap_phase_indels:
 
 rule run_haplomaker:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
         ref_fai=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa.fai"),
         jar=haplomaker_jar
     output:
-        hap=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.haplomaker_hap.hap",
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.haplomaker_phased.vcf.gz"
+        hap=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.haplomaker_hap.hap",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.haplomaker_phased.vcf.gz"
     params:
-        tmp_vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_phased.vcf.gz",
+        tmp_vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_phased.vcf.gz",
         afl=lambda wildcards: 18000 if wildcards.seq_tech == 'hifi' else 43000
     resources:
         runtime=480,
@@ -603,7 +603,7 @@ rule run_haplomaker:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.haplomaker.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.haplomaker.benchmark"
     shell:
         "java -Xmx500g -jar {input.jar} --task diploidhap --vcf {input.vcf} --out {output.hap} --afl {params.afl} --seqtype hifi "
         "--minmapq 0 --maxmapq 60 --ref {input.ref} --refx {input.ref_fai} --bam {input.bam}; sleep 20; "
@@ -611,18 +611,18 @@ rule run_haplomaker:
 
 rule run_haplomaker_indels:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
         ref_fai=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa.fai"),
         jar=haplomaker_jar
     output:
-        hap=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.haplomaker_hap.hap",
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.haplomaker_phased.vcf.gz"
+        hap=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.haplomaker_hap.hap",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.haplomaker_phased.vcf.gz"
     params:
-        tmp_invcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.vcf.gz",
-        tmp_outvcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels_phased.vcf.gz",
+        tmp_invcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        tmp_outvcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels_phased.vcf.gz",
         afl= lambda wildcards: 18000 if wildcards.seq_tech == 'hifi' else 43000
     resources:
         runtime=480,
@@ -630,7 +630,7 @@ rule run_haplomaker_indels:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.haplomaker.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.haplomaker.benchmark"
     shell:
         "cp {input.vcf} {params.tmp_invcf}; "
         "java -Xmx500g -jar {input.jar} --task diploidhap --vcf {params.tmp_invcf} --out {output.hap} --afl {params.afl} "
@@ -648,15 +648,15 @@ def get_extract_hairs_params(wildcards):
 
 rule run_hapcut2:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
         bam = base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        uz_vcf = base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.vcf",
-        fragments = temp(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut.fragments"),
-        blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2",
-        vcf=temp(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2.phased.VCF"),
-        bzvcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2_phased.vcf.gz"
+        uz_vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.vcf",
+        fragments = temp(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut.fragments"),
+        blocks=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2",
+        vcf=temp(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2.phased.VCF"),
+        bzvcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2_phased.vcf.gz"
     conda:
         "envs/hapcut2.yaml"
     params:
@@ -668,7 +668,7 @@ rule run_hapcut2:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.hapcut2.benchmark"
     shell:
         "bcftools view -m2 -M2 -Ou -o {output.uz_vcf} {input.vcf}; extractHAIRS {params.seqtech} --bam {input.bam} --VCF {output.uz_vcf} "
         "--out {output.fragments} --ref {input.ref} --region {params.chrom}; "
@@ -677,15 +677,15 @@ rule run_hapcut2:
 
 rule run_hapcut2_indels:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
         bam = base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        uz_vcf = base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.vcf",
-        fragments = temp(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut.fragments"),
-        blocks=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2",
-        vcf=temp(base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2.phased.VCF"),
-        bzvcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2_phased.vcf.gz"
+        uz_vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.vcf",
+        fragments = temp(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut.fragments"),
+        blocks=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2",
+        vcf=temp(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2.phased.VCF"),
+        bzvcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2_phased.vcf.gz"
     conda:
         "envs/hapcut2.yaml"
     params:
@@ -697,7 +697,7 @@ rule run_hapcut2_indels:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.hapcut2.benchmark"
     shell:
         "bcftools view -m2 -M2 -Ou -o {output.uz_vcf} {input.vcf}; extractHAIRS {params.seqtech} --indels 1 --bam {input.bam} --VCF {output.uz_vcf} "
         "--out {output.fragments} --ref {input.ref} --region {params.chrom}; "
@@ -706,19 +706,19 @@ rule run_hapcut2_indels:
 
 rule run_whatshap_phase:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.whatshap_phased.vcf.gz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.whatshap_phased.vcf.gz"
     conda:
         "envs/whatshap.yaml"
     wildcard_constraints:
         chrom="|".join(autosomes),
         aligner=aligner,
         seq_tech = '|'.join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.whatshap.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.whatshap.benchmark"
     resources:
         runtime=30,
         mem_mb=16*1024
@@ -727,19 +727,19 @@ rule run_whatshap_phase:
 
 rule run_whatshap_phase_indels:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap_phased.vcf.gz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap_phased.vcf.gz"
     conda:
         "envs/whatshap.yaml"
     wildcard_constraints:
         chrom="|".join(autosomes),
         aligner=aligner,
         seq_tech="|".join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap.benchmark"
     resources:
         runtime=30,
         mem_mb=16 * 1024
@@ -754,24 +754,24 @@ def get_seqtech_longphase(wildcards):
 
 rule run_longphase_phase:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase_phased.vcf.gz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase_phased.vcf.gz"
     wildcard_constraints:
         chrom="|".join(autosomes),
         aligner=aligner,
         seq_tech="|".join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase.benchmark"
     resources:
         runtime=15,
         mem_mb=16 * 1024
     conda:
         "envs/longphase.yaml"
     params:
-        prefix=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase_phased",
+        prefix=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.longphase_phased",
         seqtech=get_seqtech_longphase
     shell:
         "longphase phase -s {input.vcf} -b {input.bam} -r {input.ref} {params.seqtech} -o {params.prefix}; "
@@ -779,24 +779,24 @@ rule run_longphase_phase:
 
 rule run_longphase_phase_indels:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.chr{chrom}.filtered_snps_indels.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase_phased.vcf.gz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase_phased.vcf.gz"
     wildcard_constraints:
         chrom="|".join(autosomes),
         aligner=aligner,
         seq_tech="|".join(seq_tech)
-    benchmark: base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase.benchmark"
+    benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase.benchmark"
     resources:
         runtime=15,
         mem_mb=16 * 1024
     conda:
         "envs/longphase.yaml"
     params:
-        prefix=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase_phased",
+        prefix=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longphase_phased",
         seqtech=get_seqtech_longphase
     shell:
         "longphase phase -s {input.vcf} -b {input.bam} -r {input.ref} {params.seqtech} --indels -o {params.prefix}; "
@@ -804,9 +804,9 @@ rule run_longphase_phase_indels:
 
 rule index_phased_vcf:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz"
     output:
-        base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi"
     conda:
         "envs/samtools.yaml"
     resources:
@@ -821,8 +821,8 @@ rule index_phased_vcf:
 
 rule run_whatshap_haplotag:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz.tbi",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz.tbi",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
@@ -849,10 +849,10 @@ rule run_whatshap_haplotag:
 
 rule run_whatshap_stats:
     input:
-        base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz"
     output:
-        gtf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.gtf",
-        tsv=base_results_dir+ "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv"
+        gtf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.gtf",
+        tsv=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv"
     conda:
         "envs/whatshap.yaml"
     resources:
@@ -867,10 +867,10 @@ rule run_whatshap_stats:
 
 rule run_whatshap_stats_complex:
     input:
-        base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz"
     output:
-        gtf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.gtf",
-        tsv=base_results_dir+ "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv"
+        gtf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.gtf",
+        tsv=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv"
     conda:
         "envs/whatshap.yaml"
     resources:
@@ -913,8 +913,8 @@ rule run_methphaser:
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.primary_aln.haplotagged.bam",
         bai=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.primary_aln.haplotagged.bam.bai",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa"),
-        vcf=base_results_dir+ "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
-        gtf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.stats.gtf"
+        vcf=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
+        gtf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.stats.gtf"
     output:
         temp(directory(base_results_dir + "HG002/deepvariant/{seq_tech}_{aligner}_methphaser_{chrom}_{variant_type}/"))
     conda:
@@ -937,10 +937,10 @@ rule run_methphaser_post_processing:
         methphaser=base_results_dir + "HG002/deepvariant/{seq_tech}_{aligner}_methphaser_{chrom}_{variant_type}/",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.primary_aln.haplotagged.bam",
         bai=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.primary_aln.haplotagged.bam.bai",
-        vcf=base_results_dir+ "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
-        tbi=base_results_dir+ "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz.tbi"
+        vcf=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
+        tbi=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz.tbi"
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_unsorted.vcf.gz",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_unsorted.vcf.gz",
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.primary_aln.{variant_type}.chr{chrom}.methtagged.bam"
     conda:
         "envs/methphaser.yaml"
@@ -964,9 +964,9 @@ rule run_methphaser_post_processing:
 
 rule sort_methphaser:
     input:
-        base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_unsorted.vcf.gz"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_unsorted.vcf.gz"
     output:
-        base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
     resources:
         mem_mb=4 * 1024,
         runtime=30
@@ -986,10 +986,10 @@ def get_params_whatshap_compare(wildcards):
 
 rule get_phased_sites:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi"
     output:
-        tab=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.phased_sites.tab"
+        tab=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.phased_sites.tab"
     conda:
         "envs/samtools.yaml"
     resources:
@@ -1003,14 +1003,14 @@ rule get_phased_sites:
 
 def get_input_shared_phased_sites(wildcards):
     return [base_results_dir +
-            f"HG002/deepvariant/deep_variant_hifi_hs1.{wildcards.aligner}.{wildcards.seq_tech}." +\
+            f"HG002/deepvariant/deepvariant_hifi_hs1.{wildcards.aligner}.{wildcards.seq_tech}." +\
             f"chr{wildcards.chrom}.filtered_{wildcards.variant_type}.{tool}_phased.phased_sites.tab" for tool in phasing_methods]
 
 rule get_shared_phased_sites:
     input:
         get_input_shared_phased_sites
     output:
-        base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
     resources:
         mem_mb=2 * 1024,
         runtime=62
@@ -1025,12 +1025,12 @@ rule get_shared_phased_sites:
 
 rule run_whatshap_compare_shared_sites:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        shared_sites=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
+        shared_sites=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
     output:
-        bed=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.shared_sites.bed",
-        tab=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.shared_sites.tab"
+        bed=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.shared_sites.bed",
+        tab=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.shared_sites.tab"
     conda:
         "envs/whatshap.yaml"
     resources:
@@ -1049,12 +1049,12 @@ rule run_whatshap_compare_shared_sites:
 
 rule run_whatshap_compare_shared_sites_complex:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        shared_sites=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
+        shared_sites=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
     output:
-        bed=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors_complex_variants.shared_sites.bed",
-        tab=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.shared_sites.tab"
+        bed=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors_complex_variants.shared_sites.bed",
+        tab=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.shared_sites.tab"
     conda:
         "envs/whatshap.yaml"
     resources:
@@ -1074,11 +1074,11 @@ rule run_whatshap_compare_shared_sites_complex:
 
 rule run_whatshap_compare_all:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1]
     output:
-        bed=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.all_sites.bed",
-        tab=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.tab"
+        bed=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.all_sites.bed",
+        tab=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.tab"
     conda:
         "envs/whatshap.yaml"
     resources:
@@ -1098,11 +1098,11 @@ rule run_whatshap_compare_all:
 
 rule run_whatshap_compare_all_complex:
     input:
-        vcf=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1]
     output:
-        bed=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors_complex_variants.all_sites.bed",
-        tab=base_results_dir + "HG002/deepvariant/deep_variant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.all_sites.tab"
+        bed=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors_complex_variants.all_sites.bed",
+        tab=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.all_sites.tab"
     conda:
         "envs/whatshap.yaml"
     resources:
