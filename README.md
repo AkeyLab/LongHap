@@ -18,7 +18,7 @@ LongHap is a read-based variant phasing algorithm that integrates methylation si
 
 ### Installation
 
-LongHap's only requirements are Python >= 3.12 with the following packages installed:
+LongHap's only requirements are Python >= 3.11 with the following packages installed:
 - cyvcf2 >= 0.31.4
 - pysam >= 0.23.3
 - parasail-python >= 1.3.4
@@ -42,19 +42,21 @@ pip install longhap
 ```
 
 #### Installation from github
-All Python dependencies can be installed using the provided `longhap.yaml` file with conda:
 ```commandline
 git clone https://github.com/AkeyLab/LongHap.git
 cd LongHap/
-conda env create -f longhap.yaml
-conda activate longhap
-./longhap.py --help
+pip install -e .
+longhap --help
 ```
 
-**Note for macOS users:** Some dependencies (e.g., `parasail`, `cyvcf2`) require C build tools. If installation fails, install the following via Homebrew first:
+**Note for macOS and Linux ARM users:** `parasail` publishes no wheel for Apple Silicon
+(`macosx_arm64`) or `linux-aarch64`, so pip builds it from source on those platforms and needs C
+build tools:
 ```commandline
 brew install autoconf automake libtool
 ```
+To avoid compiling, install the dependencies from conda-forge/bioconda first (which do ship
+`osx-arm64` and `linux-aarch64` builds), then `pip install longhap --no-deps`.
 
 ### Exemplary Usage
 
