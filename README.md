@@ -36,6 +36,11 @@ pip install longhap
 longhap --help
 ```
 
+or with `uv` if you prefer:
+```commandline
+uv tool install longhap
+longhap --help
+```
 
 or from cloning and doing a local install:
 ```commandline
