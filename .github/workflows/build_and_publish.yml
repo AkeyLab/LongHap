@@ -60,16 +60,13 @@ jobs:
             -o example/phased_variants_pip_meth.vcf.gz \
             --verbose
 
-      - name: Test example data fetcher
-        run: longhap_fetch_example_data -o /tmp/longhap-example-data
-
   build_and_publish:
     needs: test
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: read
+      contents: write  # attach example.tar.gz to the release
       id-token: write  # trusted publishing to PyPI
     steps:
       - uses: actions/checkout@v6
@@ -83,6 +80,13 @@ jobs:
 
       - name: Build package
         run: python -m build
+
+      - name: Attach example data to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tar -czf example.tar.gz example/
+          gh release upload "${{ github.event.release.tag_name }}" example.tar.gz --clobber
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

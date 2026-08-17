@@ -29,19 +29,15 @@ LongHap's only requirements are Python >= 3.11 with the following packages insta
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
-After it is installed, you should be able to run `longhap --help`.
+LongHap can be installed from pypi:
 
-#### Quick start with uvx (no installation needed)
-```commandline
-uvx longhap --help
-```
-
-#### Installation with pip
 ```commandline
 pip install longhap
+longhap --help
 ```
 
-#### Installation from github
+
+or from cloning and doing a local install:
 ```commandline
 git clone https://github.com/AkeyLab/LongHap.git
 cd LongHap/
@@ -55,8 +51,6 @@ build tools:
 ```commandline
 brew install autoconf automake libtool
 ```
-To avoid compiling, install the dependencies from conda-forge/bioconda first (which do ship
-`osx-arm64` and `linux-aarch64` builds), then `pip install longhap --no-deps`.
 
 ### Exemplary Usage
 
@@ -72,31 +66,16 @@ BED file with methylation calls is provided, LongHap will additionally leverage
 methylation information to phase variants that could not be phased based on
 sequence information alone.
 
-If you installed LongHap with `pip install longhap` or from GitHub, you can run
-it directly with `longhap`. Alternatively, you can use `uvx longhap` to run it
-without installing — [uv](https://docs.astral.sh/uv/) will automatically fetch
-the package and its dependencies into a temporary environment. The examples below
-only show `longhap`, but you can do `uvx longhap` instead.
-
 #### Fetching the example data
 
 We provide toy data for chromosome 1 (chr1:10,000,000-15,000,000) of HG002 to
 try out LongHap. If you cloned the repository, the data is already in the
-`example/` directory. Otherwise, you can download it with the included
-`longhap_fetch_example_data` command:
+`example/` directory. Otherwise, download it from the latest release into an
+`example/` sub-directory of your current working directory:
 
 ```commandline
-longhap_fetch_example_data
+wget -qO- https://github.com/AkeyLab/LongHap/releases/latest/download/example.tar.gz | tar -xz
 ```
-
-Or, if using `uvx`:
-
-```commandline
-uvx --from longhap longhap_fetch_example_data
-```
-
-This will download the latest example data from GitHub into an `example/`
-sub-directory in your current working directory.
 
 #### Variant phasing based on sequence information alone:
 
