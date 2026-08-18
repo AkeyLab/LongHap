@@ -7,7 +7,7 @@ from this script can be checked against it directly.
 """
 import argparse
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -252,17 +252,16 @@ class ComparisonResult:
         return total / self.assessed_pairs if self.assessed_pairs else float('nan')
 
 
-def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
-    """Count switch errors over blocks that are contiguous in *both* call sets.
+def group_blocks(overlapping_sites, target, gt, ignore_phase_blocks=False):
+    """Assign every comparable variant pair to a phase block in each call set.
 
-    Mirrors ``whatshap compare``: variants are grouped by the pair of phase
-    block ids they belong to, blocks holding a single variant are skipped, and
-    a switch is a position where the two phasings stop agreeing (or stop
-    disagreeing).  ``ignore_phase_blocks`` treats every phased variant as
-    belonging to one block per chromosome, which is what stripping
-    ``FORMAT/PS`` before running whatshap does.
+    Returns ``(blocks, blocks_target, blocks_gt)``.  ``blocks`` is keyed on the
+    *pair* of block ids and holds the intersection blocks -- stretches that are
+    contiguously phased in both files.  ``ignore_phase_blocks`` puts every
+    phased variant of a chromosome into one block, which is what stripping
+    ``FORMAT/PS`` before running whatshap compare does.
     """
-    blocks: Dict[tuple, List[int]] = defaultdict(list)
+    blocks: Dict[tuple, List[tuple]] = defaultdict(list)
     blocks_target: Dict[tuple, List[int]] = defaultdict(list)
     blocks_gt: Dict[tuple, List[int]] = defaultdict(list)
 
@@ -282,6 +281,57 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
             blocks_gt[b_gt].append(j)
         if b_target is not None and b_gt is not None:
             blocks[(b_target, b_gt)].append((i, j))
+    return blocks, blocks_target, blocks_gt
+
+
+def agreement(block, target, gt):
+    """For each variant pair, whether both files put the same allele on haplotype 0.
+
+    Compares allele sequences rather than allele indices, because the two files
+    may order REF/ALT differently, in which case equal indices do not mean the
+    same allele.
+    """
+    return [target.allele_a[i] == gt.allele_a[j] for i, j in block]
+
+
+def interval(target, pair0, pair1):
+    """BED interval spanning two variants, in whatshap's --switch-error-bed convention."""
+    return (target.chromosome[pair0[0]],
+            int(target.position[pair0[0]]) + 1,
+            int(target.position[pair1[0]]) + 1)
+
+
+@dataclass
+class JunctionResult:
+    junctions: int = 0
+    errors: int = 0
+    positions: Optional[List[Tuple[str, int, int]]] = None
+    # only filled in when a baseline call set is supplied
+    preexisting: int = 0                # pairs the baseline already connected
+    no_truth_frame: int = 0             # pairs the truth splits, so unevaluable
+    skipped_no_baseline_phase: int = 0  # variants the baseline does not phase
+    baseline_blocks: int = 0            # blocks entering the scan
+    target_blocks: int = 0              # target blocks those baseline blocks form
+    singleton_baseline_blocks: int = 0  # of those, holding one scorable variant
+    structural_joins: int = 0           # sum over target blocks of (baseline blocks - 1)
+
+    @property
+    def error_rate(self):
+        return self.errors / self.junctions if self.junctions else float('nan')
+
+
+def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
+    """Count switch errors inside blocks that are contiguously phased in both call sets.
+
+    Mirrors ``whatshap compare``: blocks holding a single variant are skipped,
+    and a switch is a position where the two phasings stop agreeing (or stop
+    disagreeing).  Junctions *between* blocks are not assessed -- for those see
+    :func:`evaluate_junctions`.  With ``ignore_phase_blocks`` the blocks are
+    concatenated into one chain per chromosome, so the junctions are assessed
+    along with everything else.
+    """
+    blocks, blocks_target, blocks_gt = group_blocks(
+        overlapping_sites, target, gt, ignore_phase_blocks=ignore_phase_blocks)
 
     result = ComparisonResult(switch_positions=[])
     for block in blocks.values():
@@ -291,10 +341,7 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
         result.covered_variants += len(block)
         result.assessed_pairs += len(block) - 1
 
-        # Compare allele sequences rather than allele indices: the two files
-        # may order REF/ALT differently, in which case equal indices do not
-        # mean the same allele.
-        agree = [target.allele_a[i] == gt.allele_a[j] for i, j in block]
+        agree = agreement(block, target, gt)
         same_genotype = [{target.allele_a[i], target.allele_b[i]} ==
                          {gt.allele_a[j], gt.allele_b[j]} for i, j in block]
         result.diff_genotypes += len(block) - sum(same_genotype)
@@ -308,16 +355,132 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
 
         for k in range(len(block) - 1):
             if agree[k] != agree[k + 1]:
-                # same convention as whatshap's --switch-error-bed
-                result.switch_positions.append(
-                    (target.chromosome[block[k][0]],
-                     int(target.position[block[k][0]]) + 1,
-                     int(target.position[block[k + 1][0]]) + 1))
+                result.switch_positions.append(interval(target, block[k], block[k + 1]))
 
     result.blocks_target = sum(1 for b in blocks_target.values() if len(b) > 1)
     result.covered_target = sum(len(b) for b in blocks_target.values() if len(b) > 1)
     result.blocks_gt = sum(1 for b in blocks_gt.values() if len(b) > 1)
     result.covered_gt = sum(len(b) for b in blocks_gt.values() if len(b) > 1)
+    return result
+
+
+def evaluate_junctions(overlapping_sites, target, gt):
+    """Score only the connections *between* phase blocks.
+
+    Walks the variants of each chromosome in order and assesses a pair whenever
+    consecutive variants fall into different intersection blocks, i.e. exactly
+    the pairs that :func:`evaluate_phasing` cannot see but the chromosome-wide
+    comparison adds.  An error means the two blocks were joined in the wrong
+    orientation relative to the truth.
+    """
+    blocks, _, _ = group_blocks(overlapping_sites, target, gt)
+    block_of = {}
+    for key, block in blocks.items():
+        for pair in block:
+            block_of[tuple(pair)] = key
+
+    chains: Dict[str, List[tuple]] = defaultdict(list)
+    for i, j in overlapping_sites:
+        pair = (int(i), int(j))
+        if pair in block_of:
+            chains[target.chromosome[i]].append(pair)
+
+    result = JunctionResult(positions=[])
+    for chain in chains.values():
+        agree = agreement(chain, target, gt)
+        for k in range(len(chain) - 1):
+            if block_of[chain[k]] == block_of[chain[k + 1]]:
+                continue
+            result.junctions += 1
+            if agree[k] != agree[k + 1]:
+                result.errors += 1
+                result.positions.append(interval(target, chain[k], chain[k + 1]))
+    return result
+
+
+def baseline_block_map(target, baseline, match='strict'):
+    """Map each target variant to the phase block it sat in before the new joins.
+
+    Pairing goes through :func:`get_overlapping_sites`, so ``--match`` is
+    honoured here exactly as it is against the truth.  Variants the baseline
+    leaves unphased get no entry.
+    """
+    baseline_of = {}
+    for i, j in get_overlapping_sites(target, baseline, match=match):
+        if baseline.phased[j] and baseline.complete[j]:
+            baseline_of[int(i)] = (baseline.chromosome[j], baseline.phase_block[j])
+    return baseline_of
+
+
+def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
+    """Score only the connections the target established but the baseline did not.
+
+    Walks the comparable variants of each chromosome in position order, keeping
+    only those the baseline also phases -- so a variant the baseline cannot
+    place is stepped over and the nearest phased variants on either side are
+    compared directly.  An adjacent pair is a *new connection* when the target
+    puts both variants in one phase block, the baseline puts them in two, and
+    the truth phases both within one block to supply a common frame.  It is an
+    error when the two disagree in orientation relative to the truth, i.e. the
+    baseline blocks were joined the wrong way round.
+
+    Note that new connections are a subset of the pairs
+    :func:`evaluate_phasing` assesses *within* blocks, not of the ones
+    :func:`evaluate_junctions` finds between them: once the target has merged
+    two baseline blocks, both variants carry the same target PS.
+    """
+    blocks, _, _ = group_blocks(overlapping_sites, target, gt)
+    block_of = {}
+    for key, block in blocks.items():
+        for pair in block:
+            block_of[tuple(pair)] = key
+
+    result = JunctionResult(positions=[])
+    chains: Dict[str, List[tuple]] = defaultdict(list)
+    scored_target: Counter = Counter()
+    scored_baseline: Counter = Counter()
+    for i, j in overlapping_sites:
+        pair = (int(i), int(j))
+        if pair not in block_of:
+            continue
+        if pair[0] not in baseline_of:
+            result.skipped_no_baseline_phase += 1
+            continue
+        # Both counts are taken over exactly the variants scanned below, so that
+        # baseline blocks - target blocks equals the number of joins seen.
+        scored_target[(target.chromosome[i], target.phase_block[i])] += 1
+        scored_baseline[baseline_of[pair[0]]] += 1
+        chains[target.chromosome[i]].append(pair)
+
+    result.target_blocks = len(scored_target)
+    result.baseline_blocks = len(scored_baseline)
+    result.singleton_baseline_blocks = sum(1 for n in scored_baseline.values() if n == 1)
+
+    # How many joins the target made in total, counted over every variant it and
+    # the baseline both phase -- independent of whether the truth can score them,
+    # so joins lost for want of a comparable truth variant stay visible.
+    merged = defaultdict(set)
+    for i, block in baseline_of.items():
+        if target.phased[i] and target.complete[i]:
+            merged[(target.chromosome[i], target.phase_block[i])].add(block)
+    result.structural_joins = sum(len(v) - 1 for v in merged.values())
+
+    for chain in chains.values():
+        agree = agreement(chain, target, gt)
+        for k in range(len(chain) - 1):
+            (i0, j0), (i1, j1) = chain[k], chain[k + 1]
+            if target.phase_block[i0] != target.phase_block[i1]:
+                continue                        # the target claims no connection here
+            if baseline_of[i0] == baseline_of[i1]:
+                result.preexisting += 1         # the baseline already made it
+                continue
+            if gt.phase_block[j0] != gt.phase_block[j1]:
+                result.no_truth_frame += 1      # no shared frame to judge against
+                continue
+            result.junctions += 1
+            if agree[k] != agree[k + 1]:
+                result.errors += 1
+                result.positions.append(interval(target, chain[k], chain[k + 1]))
     return result
 
 
@@ -335,7 +498,22 @@ def percent(numerator, denominator):
     return '--' if denominator == 0 else f'{numerator * 100.0 / denominator:.2f}%'
 
 
-def report(target, gt, overlapping_sites, result, names=('truth', 'query')):
+def report_switches(result, header):
+    print()
+    print(f'{header}:'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
+    print_stat('phased pairs of variants assessed', result.assessed_pairs)
+    print_stat('switch errors', result.switches)
+    print_stat('switch error rate', percent(result.switches, result.assessed_pairs))
+    print_stat('switch/flip decomposition', '{}/{}'.format(*result.switch_flips))
+    print_stat('switch/flip rate', percent(sum(result.switch_flips), result.assessed_pairs))
+    print_stat('Block-wise Hamming distance', result.hamming)
+    print_stat('Block-wise Hamming distance [%]', percent(result.hamming, result.covered_variants))
+    print_stat('Different genotypes', result.diff_genotypes)
+    print_stat('Different genotypes [%]', percent(result.diff_genotypes, result.covered_variants))
+
+
+def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
+           new_connections=None, names=('truth', 'query')):
     gt_name, target_name = names
     print('VARIANT COUNTS (heterozygous / all): ')
     for name, vs in ((gt_name, gt), (target_name, target)):
@@ -347,22 +525,45 @@ def report(target, gt, overlapping_sites, result, names=('truth', 'query')):
         print(f'{label}:'.rjust(LABEL_WIDTH), str(len(het)).rjust(COUNT_WIDTH),
               '/', str(len(allk)).rjust(COUNT_WIDTH))
     print_stat('common heterozygous variants', len(overlapping_sites))
-    print_stat(f'non-singleton blocks in {gt_name}', result.blocks_gt)
-    print_stat('--> covered variants', result.covered_gt)
-    print_stat(f'non-singleton blocks in {target_name}', result.blocks_target)
-    print_stat('--> covered variants', result.covered_target)
-    print_stat('non-singleton intersection blocks', result.intersection_blocks)
-    print_stat('--> covered variants', result.covered_variants)
-    print_stat('phased pairs of variants assessed', result.assessed_pairs)
-    print_stat('switch errors', result.switches)
-    print_stat('switch error rate', percent(result.switches, result.assessed_pairs))
-    print_stat('switch/flip decomposition',
-               '{}/{}'.format(*result.switch_flips))
-    print_stat('switch/flip rate', percent(sum(result.switch_flips), result.assessed_pairs))
-    print_stat('Block-wise Hamming distance', result.hamming)
-    print_stat('Block-wise Hamming distance [%]', percent(result.hamming, result.covered_variants))
-    print_stat('Different genotypes', result.diff_genotypes)
-    print_stat('Different genotypes [%]', percent(result.diff_genotypes, result.covered_variants))
+    print_stat(f'non-singleton blocks in {gt_name}', within.blocks_gt)
+    print_stat('--> covered variants', within.covered_gt)
+    print_stat(f'non-singleton blocks in {target_name}', within.blocks_target)
+    print_stat('--> covered variants', within.covered_target)
+    print_stat('non-singleton intersection blocks', within.intersection_blocks)
+    print_stat('--> covered variants', within.covered_variants)
+
+    report_switches(within, 'WITHIN PHASE BLOCKS')
+
+    print()
+    print('BETWEEN PHASE BLOCKS:'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
+    print_stat('block junctions assessed', junctions.junctions)
+    print_stat('junction errors', junctions.errors)
+    print_stat('junction error rate', percent(junctions.errors, junctions.junctions))
+
+    if new_connections is not None:
+        n = new_connections
+        print()
+        print('NEW CONNECTIONS (vs baseline):'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
+        print_stat('new connections assessed', n.junctions)
+        print_stat('connection errors', n.errors)
+        print_stat('connection error rate', percent(n.errors, n.junctions))
+        print_stat('baseline blocks scanned', n.baseline_blocks)
+        print_stat('--> target blocks they form', n.target_blocks)
+        print_stat('--> joins between them', n.baseline_blocks - n.target_blocks)
+        print_stat('of those, holding one scorable variant', n.singleton_baseline_blocks)
+        print_stat('joins the target made over all variants', n.structural_joins)
+        print_stat('--> not assessed, no truth variant',
+                   n.structural_joins - n.junctions - n.no_truth_frame)
+        print_stat('--> not assessed, no truth frame', n.no_truth_frame)
+        print_stat('variants skipped, unphased in baseline', n.skipped_no_baseline_phase)
+
+    report_switches(chromosome_wide, 'CHROMOSOME-WIDE (blocks concatenated)')
+
+
+def write_bed(path, intervals, annotation):
+    with open(path, 'w') as out:
+        for chrom, start, end in sorted(intervals):
+            print(chrom, start, end, annotation, sep='\t', file=out)
 
 
 def main(argv):
@@ -380,15 +581,18 @@ def main(argv):
                         help="How to pair variants across the two files. 'strict' uses "
                              "(position, REF, ALT) like whatshap; 'alleles' pairs any two "
                              "sites carrying the same unordered allele pair.")
-    parser.add_argument('--ignore_phase_blocks', action='store_true', default=False,
-                        help='Treat every phased variant as being in one block per chromosome, '
-                             'equivalent to stripping FORMAT/PS before running whatshap compare')
-    parser.add_argument('--switch_error_bed', help='Write switch error intervals to this BED file')
+    parser.add_argument('--switch_error_bed',
+                        help='Write within-block switch error intervals to this BED file')
+    parser.add_argument('--junction_error_bed',
+                        help='Write misoriented block junctions to this BED file')
+    parser.add_argument('--new_connection_bed',
+                        help='Write misoriented new connections to this BED file')
     parser.add_argument('--evaluate_sv', action='store_true', default=False,
                         help='Evaluate structural variants instead of SNPs')
     parser.add_argument('--baseline_vcf', required=False,
-                        help='Baseline VCF for evaluating new connection, for example, '
-                             'derived from methylation information, in target VCF.')
+                        help='Phasing the target VCF was built on, e.g. the pre-methylation '
+                             'call set. Given this, the error rate of the connections the '
+                             'target newly established is reported.')
     parser.add_argument('--annotations', required=False,
                         help='Bed file with genome annotations, e.g., CDS, '
                              'for which to evaluate the phasing of compound heterozygous variants')
@@ -400,18 +604,28 @@ def main(argv):
     gt = load_phasing(args.gt_vcf, **load_kwargs)
 
     overlapping_sites = get_overlapping_sites(target, gt, match=args.match)
-    result = evaluate_phasing(overlapping_sites, target, gt,
-                              ignore_phase_blocks=False)
-    result_all = evaluate_phasing(overlapping_sites, target, gt,
-                              ignore_phase_blocks=True)
-    breakpoint()
-    report(target, gt, overlapping_sites, result)
+    # switches inside stretches that both files phase contiguously
+    within = evaluate_phasing(overlapping_sites, target, gt)
+    # orientation of the connections between those stretches
+    junctions = evaluate_junctions(overlapping_sites, target, gt)
+    # both together: every consecutive pair of comparable variants on a chromosome
+    chromosome_wide = evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=True)
+
+    new_connections = None
+    if args.baseline_vcf:
+        # only the joins the target added on top of the baseline
+        baseline = load_phasing(args.baseline_vcf, **load_kwargs)
+        baseline_of = baseline_block_map(target, baseline, match=args.match)
+        new_connections = evaluate_new_junctions(overlapping_sites, target, gt, baseline_of)
+
+    report(target, gt, overlapping_sites, within, junctions, chromosome_wide, new_connections)
 
     if args.switch_error_bed:
-        with open(args.switch_error_bed, 'w') as out:
-            for chrom, start, end in sorted(result.switch_positions):
-                print(chrom, start, end, 'gt<-->query', sep='\t', file=out)
-
+        write_bed(args.switch_error_bed, within.switch_positions, 'switch')
+    if args.junction_error_bed:
+        write_bed(args.junction_error_bed, junctions.positions, 'junction')
+    if args.new_connection_bed and new_connections is not None:
+        write_bed(args.new_connection_bed, new_connections.positions, 'new_connection')
 
 if __name__ == '__main__':
     main(sys.argv[1:])
