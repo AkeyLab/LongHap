@@ -38,5 +38,5 @@ groups:
 
 group-components:
  - PREP=5
- - PHASE=10
+ - PHASE=5
  - EVAL=22
