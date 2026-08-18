@@ -74,7 +74,7 @@ brew install autoconf automake libtool
 ```
 
 The github actions CI shows this working on `macos-latest`.
-<details>
+</details>
 
 ### Exemplary Usage
 
