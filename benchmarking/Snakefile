@@ -413,7 +413,9 @@ rule get_snvs_indels:
     shell:
         "bcftools concat {input.dv} {input.sniffles} | "
         "bcftools sort | "
-        "bcftools norm -m+ -f {input.ref} -Oz -o {output.vcf} ; tabix {output.vcf}"
+        "bcftools norm -m -any | "
+        "bcftools norm -d both | "
+        "bcftools norm -m +any -f {input.ref} -Oz -o {output.vcf} ; tabix {output.vcf}"
 
 
 rule call_methylations:
@@ -994,7 +996,7 @@ rule dedup_methphaser:
         mem_mb=4 * 1024,
         runtime=10
     shell:
-        "dedup_methphaser_vcf.py {input} {output}"
+        "./dedup_methphaser_vcf.py {input} {output}"
 
 def get_params_whatshap_compare(wildcards):
     if wildcards.variant_type == 'snps':
