@@ -29,8 +29,9 @@ def load_phasing(vcf_f, chrom):
             is_phased = variant.genotypes[0][2]
             ps = variant.format('PS')[0][0] if variant.format('PS') is not None else np.nan
             if len(alt) > 1:
+                print(pos)
                 raise ValueError("Multi-allelic variants are not supported, "
-                                 f"please split the {vcf_f} into bi-allelic variants first, using bcftools norm -m -any")
+                                 f"please split {vcf_f} into bi-allelic variants first, using bcftools norm -m -any")
 
             elif len(ref) == len(alt[0]) == 1:
                 variant_type.append('SNP')
