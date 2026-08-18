@@ -27,6 +27,7 @@ def load_phasing(vcf_f, chrom):
             alt = [a.upper() for a in variant.ALT]
             gt = variant.genotypes[0][:2]
             is_phased = variant.genotypes[0][2]
+            breakpoint()
             ps = variant.FORMAT['PS'] if 'PS' in variant.FORMAT else np.nan
             if len(alt) > 1:
                 raise ValueError("Multi-allelic variants are not supported, "
