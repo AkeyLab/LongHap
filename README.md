@@ -18,6 +18,38 @@ LongHap is a read-based variant phasing algorithm that integrates methylation si
 
 ### Installation
 
+<details open>
+    
+<summary>Install with <code>pip</code></summary>
+    
+```commandline
+pip install longhap
+longhap --help
+```
+</details>
+
+<details>
+<summary>or install with <code>uv</code></summary>
+    
+```commandline
+uv tool install longhap
+longhap --help
+```
+</details>
+
+<details>
+<summary> or <code>git clone</code> and install locally</summary>
+    
+```commandline
+git clone https://github.com/AkeyLab/LongHap.git
+cd LongHap/
+pip install -e .
+longhap --help
+```
+</details>
+
+### Requirements
+
 LongHap's only requirements are Python >= 3.11 with the following packages installed:
 - cyvcf2 >= 0.31.4
 - pysam >= 0.23.3
@@ -28,27 +60,6 @@ LongHap's only requirements are Python >= 3.11 with the following packages insta
 - scipy >= 1.17.0
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
-
-LongHap can be installed from pypi:
-
-```commandline
-pip install longhap
-longhap --help
-```
-
-or with `uv` if you prefer:
-```commandline
-uv tool install longhap
-longhap --help
-```
-
-or from cloning and doing a local install:
-```commandline
-git clone https://github.com/AkeyLab/LongHap.git
-cd LongHap/
-pip install -e .
-longhap --help
-```
 
 **Note for macOS and Linux ARM users:** `parasail` publishes no wheel for Apple Silicon
 (`macosx_arm64`) or `linux-aarch64`, so pip builds it from source on those platforms and needs C
@@ -114,7 +125,7 @@ longhap \
 ```
 
 
-#### General phasing options  
+### General phasing options  
 
 When using ONT data, replace the `--pacbio` flag with `--ont`. When you want to phase SNVs only, add the `--snvs_only` flag. When you want to phase multiallelic variants, add the `--multiallelics` flag.
 
