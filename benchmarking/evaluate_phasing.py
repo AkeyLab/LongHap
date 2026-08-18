@@ -73,6 +73,11 @@ def get_overlapping_sites(positions1, positions2, allele_a1, allele_a2, allele_b
     overlapping_sites = np.array(overlapping_sites)
     return overlapping_sites
 
+def evaluate_phasing(overlapping_sites, genotypes_target, genotypes_gt):
+    genotypes_target = genotypes_target[overlapping_sites[:, 1]]
+    genotypes_gt = genotypes_gt[overlapping_sites[:, 2]]
+    breakpoint()
+
 
 def main(argv):
     parser = argparse.ArgumentParser()
@@ -94,6 +99,7 @@ def main(argv):
      gt_phased, gt_phase_block, gt_allele_a, gt_allele_b) = load_phasing(args.gt_vcf)
     overlapping_sites = get_overlapping_sites(target_positions, gt_positions, target_allele_a, gt_allele_a,
                                               target_allele_b, gt_allele_b, target_phased, gt_phased)
+    evaluate_phasing(overlapping_sites, target_genotypes, gt_genotypes)
     breakpoint()
 
 
