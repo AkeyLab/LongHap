@@ -27,6 +27,7 @@ groups:
  - run_methphaser=PHASE
  - run_methphaser_post_processing=PHASE
  - sort_methphaser=PHASE
+ - deduplicate_methphaser=PHASE
  - run_whatshap_stats=PHASE
  - get_shared_phased_sites=EVAL
  - run_whatshap_compare_all=EVAL

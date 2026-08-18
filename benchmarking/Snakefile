@@ -36,15 +36,20 @@ rule all:
         expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors_complex_variants.{sites}.bed",
                chrom=autosomes, variant_type=['snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
-        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.{sites}.tab",
-               chrom=autosomes, variant_type=['snps_indels'],
-               phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
+        # expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation_complex_variants.{sites}.tab",
+        #        chrom=autosomes, variant_type=['snps_indels'],
+        #        phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
         expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv",
                chrom=autosomes, variant_type=['snps', 'snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
         expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv",
                chrom=autosomes, variant_type=['snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap_and_methphaser_connected_intervals.bed",
+               chrom=autosomes, aligner=aligner, seq_tech=seq_tech),
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_connected_intervals.bed",
+            chrom=autosomes,aligner=aligner,seq_tech=seq_tech),
+
 
 rule download_reference_genome:
     output:
@@ -853,7 +858,8 @@ rule run_whatshap_stats:
         base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz"
     output:
         gtf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.gtf",
-        tsv=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv"
+        tsv=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats.tsv",
+        blocks=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.blocks.bed",
     conda:
         "envs/whatshap.yaml"
     resources:
@@ -864,7 +870,7 @@ rule run_whatshap_stats:
         aligner=aligner,
         seq_tech="|".join(seq_tech)
     shell:
-        'whatshap stats --gtf={output.gtf} --tsv={output.tsv} {input}'
+        'whatshap stats --block-list {output.blocks} --gtf={output.gtf} --tsv={output.tsv} {input}'
 
 rule run_whatshap_stats_complex:
     input:
@@ -967,7 +973,7 @@ rule sort_methphaser:
     input:
         base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_unsorted.vcf.gz"
     output:
-        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_sorted.vcf.gz"
     resources:
         mem_mb=4 * 1024,
         runtime=30
@@ -978,6 +984,17 @@ rule sort_methphaser:
         seq_tech="|".join(seq_tech)
     shell:
         "bcftools sort -Oz -o {output} {input}"
+
+rule dedup_methphaser:
+    input:
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_sorted.vcf.gz"
+    output:
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
+    resources:
+        mem_mb=4 * 1024,
+        runtime=10
+    shell:
+        "dedup_methphaser_vcf.py {input} {output}"
 
 def get_params_whatshap_compare(wildcards):
     if wildcards.variant_type == 'snps':
@@ -1120,3 +1137,22 @@ rule run_whatshap_compare_all_complex:
         "--switch-error-bed {output.bed} <(bcftools norm -r {params.chrom} -m -any {input.gt})"
         " <(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any | bcftools view -V snps)"
 
+rule get_phase_blocks_connected_longhap:
+    input:
+        nometh=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_phased.blocks.bed",
+        meth=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_meth_phased.blocks.bed"
+    output:
+        connected=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_meth_connected_intervals.bed"
+    shell:
+        "bedtools intersect -a {input.nometh} -b {input.meth} -f 1.0 -wao | "
+        "awk -v OFS='\\t' 'NR>1 && $1==pc && $5!=\".\" && $5==pms && $6==pme && $2>pe {{print pc,pe,$2}}{{pc=$1;pe=$3;pms=$5;pme=$6}}' > {output}"
+
+rule get_phase_blocks_connected_methphaser:
+    input:
+        nometh=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.blocks.bed",
+        meth=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.blocks.bed"
+    output:
+        connected=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_connected_intervals.bed"
+    shell:
+        "bedtools intersect -a {input.nometh} -b {input.meth} -f 1.0 -wao | "
+        "awk -v OFS='\\t' '$1==pc && $4!=\".\" && $5==pms && $6==pme && $2>pe {{print pc,pe,$2}}{{pc=$1;pe=$3;pms=$5;pme=$6}}' > {output} "
