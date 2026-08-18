@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Read-based variant phasing with methylation integration for long-read sequencing"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 authors = [
     { name = "Aaron Pfennig" },
 ]
@@ -21,7 +21,10 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
@@ -42,10 +45,9 @@ Repository = "https://github.com/AkeyLab/LongHap"
 
 [project.scripts]
 longhap = "longhap:main"
-longhap_fetch_example_data = "fetch_example_data:main"
 
 [tool.setuptools]
-py-modules = ["longhap", "fetch_example_data"]
+py-modules = ["longhap"]
 
 [tool.setuptools.dynamic]
 version = {attr = "longhap.__version__"}

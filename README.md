@@ -18,7 +18,7 @@ LongHap is a read-based variant phasing algorithm that integrates methylation si
 
 ### Installation
 
-LongHap's only requirements are Python >= 3.12 with the following packages installed:
+LongHap's only requirements are Python >= 3.11 with the following packages installed:
 - cyvcf2 >= 0.31.4
 - pysam >= 0.23.3
 - parasail-python >= 1.3.4
@@ -29,29 +29,30 @@ LongHap's only requirements are Python >= 3.12 with the following packages insta
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
-After it is installed, you should be able to run `longhap --help`.
+LongHap can be installed from pypi:
 
-#### Quick start with uvx (no installation needed)
-```commandline
-uvx longhap --help
-```
-
-#### Installation with pip
 ```commandline
 pip install longhap
+longhap --help
 ```
 
-#### Installation from github
-All Python dependencies can be installed using the provided `longhap.yaml` file with conda:
+or with `uv` if you prefer:
+```commandline
+uv tool install longhap
+longhap --help
+```
+
+or from cloning and doing a local install:
 ```commandline
 git clone https://github.com/AkeyLab/LongHap.git
 cd LongHap/
-conda env create -f longhap.yaml
-conda activate longhap
-./longhap.py --help
+pip install -e .
+longhap --help
 ```
 
-**Note for macOS users:** Some dependencies (e.g., `parasail`, `cyvcf2`) require C build tools. If installation fails, install the following via Homebrew first:
+**Note for macOS and Linux ARM users:** `parasail` publishes no wheel for Apple Silicon
+(`macosx_arm64`) or `linux-aarch64`, so pip builds it from source on those platforms and needs C
+build tools:
 ```commandline
 brew install autoconf automake libtool
 ```
@@ -70,31 +71,16 @@ BED file with methylation calls is provided, LongHap will additionally leverage
 methylation information to phase variants that could not be phased based on
 sequence information alone.
 
-If you installed LongHap with `pip install longhap` or from GitHub, you can run
-it directly with `longhap`. Alternatively, you can use `uvx longhap` to run it
-without installing — [uv](https://docs.astral.sh/uv/) will automatically fetch
-the package and its dependencies into a temporary environment. The examples below
-only show `longhap`, but you can do `uvx longhap` instead.
-
 #### Fetching the example data
 
 We provide toy data for chromosome 1 (chr1:10,000,000-15,000,000) of HG002 to
 try out LongHap. If you cloned the repository, the data is already in the
-`example/` directory. Otherwise, you can download it with the included
-`longhap_fetch_example_data` command:
+`example/` directory. Otherwise, download it from the latest release into an
+`example/` sub-directory of your current working directory:
 
 ```commandline
-longhap_fetch_example_data
+wget -qO- https://github.com/AkeyLab/LongHap/releases/latest/download/example.tar.gz | tar -xz
 ```
-
-Or, if using `uvx`:
-
-```commandline
-uvx --from longhap longhap_fetch_example_data
-```
-
-This will download the latest example data from GitHub into an `example/`
-sub-directory in your current working directory.
 
 #### Variant phasing based on sequence information alone:
 

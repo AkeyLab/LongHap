@@ -10,17 +10,20 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install build dependencies
         run: pip install build
@@ -57,65 +60,33 @@ jobs:
             -o example/phased_variants_pip_meth.vcf.gz \
             --verbose
 
-      - name: Test conda install from source
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          activate-environment: longhap
-          environment-file: longhap.yaml
-          conda-remove-defaults: "true"
-
-      - name: Test longhap via conda environment
-        shell: bash -el {0}
-        run: |
-          conda activate longhap
-          ./longhap.py --help
-          ./longhap.py --version
-
-      - name: Test conda install - sequence-only phasing
-        shell: bash -el {0}
-        run: |
-          conda activate longhap
-          ./longhap.py \
-            --vcf example/deepvariant.vcf.gz \
-            --bam example/pacbio.bam \
-            --reference example/toy_reference.fa \
-            --chrom chr1 \
-            --pacbio \
-            -o example/phased_variants_conda_seq.vcf.gz \
-            --verbose
-
-      - name: Test conda install - sequence and methylation phasing
-        shell: bash -el {0}
-        run: |
-          conda activate longhap
-          ./longhap.py \
-            --vcf example/deepvariant.vcf.gz \
-            --bam example/pacbio.bam \
-            --methylation_calls example/methylation.bed \
-            --reference example/toy_reference.fa \
-            --chrom chr1 \
-            --pacbio \
-            -o example/phased_variants_conda_meth.vcf.gz \
-            --verbose
-
-      - name: Upload build artifacts
-        if: github.event_name == 'release'
-        uses: actions/upload-artifact@v6
-        with:
-          name: dist
-          path: dist/
-
-  publish:
-    needs: build
+  build_and_publish:
+    needs: test
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: pypi
-    if: github.event_name == 'release'
+    permissions:
+      contents: write  # attach example.tar.gz to the release
+      id-token: write  # trusted publishing to PyPI
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
         with:
-          name: dist
-          path: dist/
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Attach example data to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tar -czf example.tar.gz example/
+          gh release upload "${{ github.event.release.tag_name }}" example.tar.gz --clobber
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
