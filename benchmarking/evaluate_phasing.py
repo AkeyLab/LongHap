@@ -767,6 +767,11 @@ def percent(numerator, denominator):
     return '--' if denominator == 0 else f'{numerator * 100.0 / denominator:.2f}%'
 
 
+def fraction(numerator, denominator):
+    """Machine-readable counterpart of percent(): a float, or '' when undefined."""
+    return '' if denominator == 0 else numerator / denominator
+
+
 def report_switches(result, header):
     print()
     print(f'{header}:'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
@@ -860,6 +865,145 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
     report_switches(chromosome_wide, 'CHROMOSOME-WIDE (blocks concatenated)')
 
 
+def switch_columns(prefix, result):
+    """The ten switch statistics, named under one section prefix."""
+    if result is None:
+        keys = ('assessed_pairs', 'switches', 'switch_rate', 'switchflip_switches',
+                'switchflip_flips', 'switchflip_rate', 'hamming', 'hamming_rate',
+                'diff_genotypes', 'diff_genotypes_rate')
+        return {f'{prefix}_{k}': '' for k in keys}
+    switches, flips = result.switch_flips
+    return {
+        f'{prefix}_assessed_pairs': result.assessed_pairs,
+        f'{prefix}_switches': result.switches,
+        f'{prefix}_switch_rate': fraction(result.switches, result.assessed_pairs),
+        f'{prefix}_switchflip_switches': switches,
+        f'{prefix}_switchflip_flips': flips,
+        f'{prefix}_switchflip_rate': fraction(switches + flips, result.assessed_pairs),
+        f'{prefix}_hamming': result.hamming,
+        f'{prefix}_hamming_rate': fraction(result.hamming, result.covered_variants),
+        f'{prefix}_diff_genotypes': result.diff_genotypes,
+        f'{prefix}_diff_genotypes_rate': fraction(result.diff_genotypes, result.covered_variants),
+    }
+
+
+def collect_summary(args, target, gt, overlapping_sites, within, junctions, chromosome_wide,
+                    new_connections=None, sv=None, genes=None):
+    """Every statistic the report prints, as one flat row.
+
+    Built from the same result objects report() reads, so the two cannot disagree.
+    Tests that did not run still contribute their columns, with empty values, so the
+    header stays identical between runs and the rows concatenate.
+    """
+    het_gt, het_target = set(gt.keys()), set(target.keys())
+    row = {
+        'label': args.label or '',
+        'sample': args.sample or '',
+        'chromosomes': ','.join(dict.fromkeys(target.chromosome.tolist())),
+        'vcf': args.vcf,
+        'gt_vcf': args.gt_vcf,
+        'baseline_vcf': args.baseline_vcf or '',
+        'annotations': args.annotations or '',
+        'match': args.match,
+        'only_snvs': int(args.only_snvs),
+        'keep_duplicate_positions': int(args.keep_duplicate_positions),
+        'min_sv_length': args.min_sv_length,
+
+        'truth_het': len(gt),
+        'truth_all': gt.n_total,
+        'query_het': len(target),
+        'query_all': target.n_total,
+        'union_het': len(het_gt | het_target),
+        'union_all': len(gt.all_keys | target.all_keys),
+        'intersection_het': len(het_gt & het_target),
+        'intersection_all': len(gt.all_keys & target.all_keys),
+        'common_het': len(overlapping_sites),
+        'truth_blocks': within.blocks_gt,
+        'truth_covered': within.covered_gt,
+        'query_blocks': within.blocks_target,
+        'query_covered': within.covered_target,
+        'intersection_blocks': within.intersection_blocks,
+        'intersection_covered': within.covered_variants,
+    }
+    row.update(switch_columns('within', within))
+    row.update(switch_columns('chrwide', chromosome_wide))
+
+    row.update({
+        'junction_assessed': junctions.junctions,
+        'junction_errors': junctions.errors,
+        'junction_rate': fraction(junctions.errors, junctions.junctions),
+    })
+
+    if new_connections is None:
+        row.update({f'newconn_{k}': '' for k in (
+            'assessed', 'errors', 'rate', 'baseline_blocks', 'target_blocks', 'joins_between',
+            'singleton_baseline_blocks', 'joins_total', 'not_assessed_no_truth_variant',
+            'not_assessed_no_truth_frame', 'skipped_unphased_baseline')})
+    else:
+        n = new_connections
+        row.update({
+            'newconn_assessed': n.junctions,
+            'newconn_errors': n.errors,
+            'newconn_rate': fraction(n.errors, n.junctions),
+            'newconn_baseline_blocks': n.baseline_blocks,
+            'newconn_target_blocks': n.target_blocks,
+            'newconn_joins_between': n.baseline_blocks - n.target_blocks,
+            'newconn_singleton_baseline_blocks': n.singleton_baseline_blocks,
+            'newconn_joins_total': n.structural_joins,
+            'newconn_not_assessed_no_truth_variant':
+                n.structural_joins - n.junctions - n.no_truth_frame,
+            'newconn_not_assessed_no_truth_frame': n.no_truth_frame,
+            'newconn_skipped_unphased_baseline': n.skipped_no_baseline_phase,
+        })
+
+    sv_types = ('DEL', 'INS', 'Multi', 'Other')
+    if sv is None:
+        row.update({f'sv_{k}': '' for k in (
+            'total', 'evaluated', 'connections', 'errors', 'error_rate', 'correct', 'flipped',
+            'ambiguous', 'one_sided', 'no_anchor') + sv_types})
+    else:
+        row.update({
+            'sv_total': sv.total,
+            'sv_evaluated': sv.svs,
+            'sv_connections': sv.connections,
+            'sv_errors': sv.errors,
+            'sv_error_rate': fraction(sv.errors, sv.connections),
+            'sv_correct': sv.correct,
+            'sv_flipped': sv.flipped,
+            'sv_ambiguous': sv.ambiguous,
+            'sv_one_sided': sv.one_sided,
+            'sv_no_anchor': sv.no_anchor,
+        })
+        row.update({f'sv_{name}': sv.by_type.get(name, 0) for name in sv_types})
+
+    if genes is None:
+        row.update({f'gene_{k}': '' for k in (
+            'genes', 'sites', 'sites_scorable', 'single_site_genes', 'connections', 'errors',
+            'error_rate', 'unresolved', 'correct', 'with_error', 'partly_resolved')})
+    else:
+        row.update({
+            'gene_genes': genes.genes,
+            'gene_sites': genes.sites,
+            'gene_sites_scorable': genes.sites_scorable,
+            'gene_single_site_genes': genes.single_site_genes,
+            'gene_connections': genes.connections,
+            'gene_errors': genes.errors,
+            'gene_error_rate': fraction(genes.errors, genes.connections),
+            'gene_unresolved': genes.unresolved,
+            'gene_correct': genes.genes_correct,
+            'gene_with_error': genes.genes_with_error,
+            'gene_partly_resolved': genes.genes_unresolved,
+        })
+    return row
+
+
+def write_summary_tsv(path, row):
+    """Write the header and the single summary row for this run."""
+    with open(path, 'w') as out:
+        print(*row.keys(), sep='\t', file=out)
+        print(*row.values(), sep='\t', file=out)
+
+
 def write_bed(path, intervals, annotation):
     with open(path, 'w') as out:
         for chrom, start, end in sorted(intervals):
@@ -905,6 +1049,12 @@ def main(argv):
                              'many rows. Scores whether the heterozygous sites sharing a gene are '
                              'put in the right cis/trans arrangement, which is what a compound '
                              'heterozygous call rests on. May be genome-wide.')
+    parser.add_argument('--summary_tsv',
+                        help='Write every summary statistic as one row to this TSV. The header is '
+                             'the same whichever tests were run, so rows from different runs '
+                             'concatenate. Rates are fractions, empty when undefined.')
+    parser.add_argument('--label', default='',
+                        help='Free-form run identifier carried in the --summary_tsv row')
     parser.add_argument('--gene_tsv',
                         help='With --annotations, write per-gene results to this TSV')
     parser.add_argument('--gene_error_bed',
@@ -942,6 +1092,11 @@ def main(argv):
 
     report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
            new_connections, sv, genes)
+
+    if args.summary_tsv:
+        write_summary_tsv(args.summary_tsv,
+                          collect_summary(args, target, gt, overlapping_sites, within, junctions,
+                                          chromosome_wide, new_connections, sv, genes))
 
     if args.switch_error_bed:
         write_bed(args.switch_error_bed, within.switch_positions, 'switch')
