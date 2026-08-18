@@ -25,7 +25,7 @@ LABEL_WIDTH = 40
 class VariantSet:
     """Heterozygous variants of a single sample, in VCF order.
 
-    ``position`` is 0-based (whatshap's convention). ``allele_a``/``allele_b``
+    ``position`` is 0-based . ``allele_a``/``allele_b``
     are the actual allele *sequences* carried by haplotype 0 and haplotype 1,
     and are ``None`` where the genotype has a missing allele.
     """
@@ -128,8 +128,7 @@ def load_phasing(vcf_f, sample=None, only_snvs=False, keep_duplicate_positions=F
         alt_l.append(alt)
         genotypes.append(gt)
         phased.append(bool(variant.genotypes[0][2]))
-        # a phased variant without PS belongs to a single per-chromosome block
-        phase_block.append(int(variant.format('PS')[0][0]) if 'PS' in variant.FORMAT else 0)
+        phase_block.append(int(variant.format('PS')[0][0]) if 'PS' in variant.FORMAT else -1)
         variant_type.append(classify(ref, alt))
         allele_a.append(alleles[gt[0]] if has_all else None)
         allele_b.append(alleles[gt[1]] if has_all else None)
@@ -402,7 +401,10 @@ def main(argv):
 
     overlapping_sites = get_overlapping_sites(target, gt, match=args.match)
     result = evaluate_phasing(overlapping_sites, target, gt,
-                              ignore_phase_blocks=args.ignore_phase_blocks)
+                              ignore_phase_blocks=False)
+    result_all = evaluate_phasing(overlapping_sites, target, gt,
+                              ignore_phase_blocks=True)
+    breakpoint()
     report(target, gt, overlapping_sites, result)
 
     if args.switch_error_bed:
