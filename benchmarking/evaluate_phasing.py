@@ -76,6 +76,15 @@ def get_overlapping_sites(positions1, positions2, allele_a1, allele_a2, allele_b
 def evaluate_phasing(overlapping_sites, genotypes_target, genotypes_gt):
     genotypes_target = genotypes_target[overlapping_sites[:, 1]]
     genotypes_gt = genotypes_gt[overlapping_sites[:, 2]]
+    errors = 0
+    for i in range(genotypes_target.shape[0]):
+        if ((np.all(genotypes_target[i, :] == genotypes_gt[i, :]) and
+             np.all(genotypes_target[i + 1, :] == genotypes_gt[i + 1, :])) or
+                (np.all(genotypes_target[i, :] != genotypes_gt[i, :]) and
+                 np.all(genotypes_target[i + 1, :] != genotypes_gt[i + 1, :]))):
+            pass
+        else:
+            errors += 1
     breakpoint()
 
 
