@@ -367,6 +367,8 @@ rule merge_snvs_svs:
     shell:
         "bcftools concat {input.dv} {input.sniffles} | "
         "bcftools sort | "
+        "bcftools norm -m -any | "
+        "bcftools norm -d both | "
         "bcftools norm -m+ -f {input.ref} |"
         "bcftools sort -Oz -o {output.vcf} ; tabix {output.vcf}"
 
