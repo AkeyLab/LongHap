@@ -6,6 +6,8 @@ The variant counting and switch-error statistics are defined to reproduce
 from this script can be checked against it directly.
 """
 import argparse
+import gzip
+import heapq
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -294,11 +296,27 @@ def agreement(block, target, gt):
     return [target.allele_a[i] == gt.allele_a[j] for i, j in block]
 
 
-def interval(target, pair0, pair1):
+def interval(target, i0, i1):
     """BED interval spanning two variants, in whatshap's --switch-error-bed convention."""
-    return (target.chromosome[pair0[0]],
-            int(target.position[pair0[0]]) + 1,
-            int(target.position[pair1[0]]) + 1)
+    return (target.chromosome[i0],
+            int(target.position[i0]) + 1,
+            int(target.position[i1]) + 1)
+
+
+def scorable_chains(overlapping_sites, target, gt):
+    """Comparable variant pairs per chromosome, in position order.
+
+    A pair is comparable when both files phase it with a complete genotype and
+    the truth can place it, i.e. it sits in one of the intersection blocks.
+    """
+    blocks, _, _ = group_blocks(overlapping_sites, target, gt)
+    scorable = {tuple(pair) for block in blocks.values() for pair in block}
+    chains: Dict[str, List[tuple]] = defaultdict(list)
+    for i, j in overlapping_sites:
+        pair = (int(i), int(j))
+        if pair in scorable:
+            chains[target.chromosome[i]].append(pair)
+    return chains
 
 
 @dataclass
@@ -318,6 +336,48 @@ class JunctionResult:
     @property
     def error_rate(self):
         return self.errors / self.junctions if self.junctions else float('nan')
+
+
+@dataclass
+class SvResult:
+    total: int = 0          # non-SNPs in the call set, phased or not
+    svs: int = 0            # of those, the ones the truth can score
+    connections: int = 0
+    errors: int = 0
+    correct: int = 0        # anchors agree with each other, the SV agrees with both
+    flipped: int = 0        # anchors agree with each other, the SV disagrees with both
+    ambiguous: int = 0      # anchors disagree, so a real switch sits at the SV
+    one_sided: int = 0      # only one of the two connections is evaluable
+    no_anchor: int = 0      # neither side is evaluable
+    by_type: Optional[Counter] = None
+    positions: Optional[List[Tuple[str, int, int]]] = None
+
+    @property
+    def error_rate(self):
+        return self.errors / self.connections if self.connections else float('nan')
+
+
+@dataclass
+class GeneResult:
+    # The first three depend only on the call set and the annotation, never on how
+    # well anything was phased, so they are identical across tools run on one VCF
+    # and give the comparison a fixed denominator.
+    genes: int = 0                 # genes carrying at least two het sites, phased or not
+    sites: int = 0                 # het sites inside those genes, phased or not
+    single_site_genes: int = 0     # one het site, so no connection to make
+    sites_scorable: int = 0        # of `sites`, those the truth can score
+    connections: int = 0           # consecutive pairs the phasing resolves
+    errors: int = 0                # of those, pairs placed cis when truth says trans, or vice versa
+    unresolved: int = 0            # consecutive pairs it cannot place, for any reason
+    genes_correct: int = 0
+    genes_with_error: int = 0
+    genes_unresolved: int = 0      # no errors, but at least one pair it cannot place
+    per_gene: Optional[List[tuple]] = None
+    positions: Optional[List[Tuple[str, int, int]]] = None
+
+    @property
+    def error_rate(self):
+        return self.errors / self.connections if self.connections else float('nan')
 
 
 def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
@@ -355,7 +415,7 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
 
         for k in range(len(block) - 1):
             if agree[k] != agree[k + 1]:
-                result.switch_positions.append(interval(target, block[k], block[k + 1]))
+                result.switch_positions.append(interval(target, block[k][0], block[k + 1][0]))
 
     result.blocks_target = sum(1 for b in blocks_target.values() if len(b) > 1)
     result.covered_target = sum(len(b) for b in blocks_target.values() if len(b) > 1)
@@ -379,14 +439,8 @@ def evaluate_junctions(overlapping_sites, target, gt):
         for pair in block:
             block_of[tuple(pair)] = key
 
-    chains: Dict[str, List[tuple]] = defaultdict(list)
-    for i, j in overlapping_sites:
-        pair = (int(i), int(j))
-        if pair in block_of:
-            chains[target.chromosome[i]].append(pair)
-
     result = JunctionResult(positions=[])
-    for chain in chains.values():
+    for chain in scorable_chains(overlapping_sites, target, gt).values():
         agree = agreement(chain, target, gt)
         for k in range(len(chain) - 1):
             if block_of[chain[k]] == block_of[chain[k + 1]]:
@@ -394,7 +448,222 @@ def evaluate_junctions(overlapping_sites, target, gt):
             result.junctions += 1
             if agree[k] != agree[k + 1]:
                 result.errors += 1
-                result.positions.append(interval(target, chain[k], chain[k + 1]))
+                result.positions.append(interval(target, chain[k][0], chain[k + 1][0]))
+    return result
+
+
+def allele_length(vs, k):
+    """Length of the longest allele of a variant, used to size indels and SVs."""
+    return max(len(vs.ref[k]), max(len(a) for a in vs.alt[k]))
+
+
+def nearest_snp_indices(chain, target):
+    """For every position in the chain, the nearest SNP position to its left and right.
+
+    Anchoring on SNPs keeps both reference points on variants a phaser places from
+    direct read support, so a disagreement is attributable to the variant between them.
+    """
+    left, right = [None] * len(chain), [None] * len(chain)
+    last = None
+    for k, (i, _) in enumerate(chain):
+        left[k] = last
+        if target.variant_type[i] == 'SNP':
+            last = k
+    last = None
+    for k in range(len(chain) - 1, -1, -1):
+        right[k] = last
+        if target.variant_type[chain[k][0]] == 'SNP':
+            last = k
+    return left, right
+
+
+def evaluate_svs(overlapping_sites, target, gt, min_sv_length=0):
+    """Score how well each non-SNP is placed relative to its flanking SNPs.
+
+    For every scorable non-SNP the two connections ``anchor_a - SV - anchor_b`` are
+    tested against the truth, where the anchors are the nearest SNPs on either side.
+    The two connections are judged independently: a connection needs only its own two
+    variants to share a target phase set and a truth phase set, so an SV at the start
+    of a block is still scored against the anchor that follows it.
+
+    Reads nothing but position, alleles, genotype and PS, so it applies to any phasing
+    tool that writes standard phase sets.
+    """
+    result = SvResult(by_type=Counter(), positions=[])
+    # Every non-SNP in the call set, phased or not, so the denominator does not move
+    # with how much of the call set a given tool managed to phase.
+    for i in range(len(target)):
+        if target.variant_type[i] == 'SNP':
+            continue
+        if min_sv_length and allele_length(target, i) < min_sv_length:
+            continue
+        result.total += 1
+
+    for chain in scorable_chains(overlapping_sites, target, gt).values():
+        agree = agreement(chain, target, gt)
+        left, right = nearest_snp_indices(chain, target)
+        for k, (i, j) in enumerate(chain):
+            if target.variant_type[i] == 'SNP':
+                continue
+            if min_sv_length and allele_length(target, i) < min_sv_length:
+                continue
+            result.svs += 1
+            result.by_type[target.variant_type[i]] += 1
+
+            sides = []
+            for anchor in (left[k], right[k]):
+                if anchor is None:
+                    continue
+                a, b = chain[anchor], chain[k]
+                # each connection stands on its own two variants
+                if target.phase_block[a[0]] != target.phase_block[b[0]]:
+                    continue
+                if gt.phase_block[a[1]] != gt.phase_block[b[1]]:
+                    continue
+                sides.append(anchor)
+
+            if not sides:
+                result.no_anchor += 1
+                continue
+
+            errors = 0
+            for anchor in sides:
+                result.connections += 1
+                if agree[anchor] != agree[k]:
+                    errors += 1
+                    lo, hi = sorted((anchor, k))
+                    result.positions.append(interval(target, chain[lo][0], chain[hi][0]))
+            result.errors += errors
+
+            if len(sides) == 1:
+                result.one_sided += 1
+            elif errors == 0:
+                result.correct += 1
+            elif errors == 2:
+                result.flipped += 1
+            else:
+                # the two anchors disagree with each other, so a switch genuinely lies
+                # between them and the SV's own placement cannot be singled out
+                result.ambiguous += 1
+    return result
+
+
+def load_annotations(path, chromosomes=None):
+    """Read a 4-column BED (chrom, start, end, gene) into per-chromosome exon lists.
+
+    One gene occupies many rows -- one per exon, and one per transcript isoform,
+    so rows belonging to the same gene routinely overlap each other.  Rows on
+    chromosomes absent from the VCFs are dropped, which keeps a genome-wide
+    annotation cheap when only one chromosome is being evaluated.
+    """
+    exons: Dict[str, List[tuple]] = defaultdict(list)
+    opener = gzip.open if str(path).endswith('.gz') else open
+    with opener(path, 'rt') as handle:
+        for line_no, line in enumerate(handle, 1):
+            if not line.strip() or line.startswith(('#', 'track ', 'browser ')):
+                continue
+            fields = line.rstrip('\n').split('\t')
+            if len(fields) < 4:
+                raise SystemExit(f'{path}:{line_no}: expected 4 columns '
+                                 f'(chrom, start, end, gene), found {len(fields)}')
+            chrom = fields[0]
+            if chromosomes is not None and chrom not in chromosomes:
+                continue
+            exons[chrom].append((int(fields[1]), int(fields[2]), fields[3]))
+    for chrom in exons:
+        exons[chrom].sort()
+    return exons
+
+
+def genes_by_variant(indices, target, chrom_exons):
+    """Indices of the variants overlapping each gene's exons, in position order.
+
+    Sweeps variants and exons together, keeping the exons that still reach the
+    current variant in a heap ordered by end.  A variant is recorded once per
+    gene however many of that gene's exons it falls in, and a variant is
+    compared by its full reference span so an indel reaching into an exon counts.
+    """
+    by_gene: Dict[str, List[int]] = defaultdict(list)
+    e = 0
+    active: List[tuple] = []
+    for i in indices:
+        start = int(target.position[i])
+        end = start + len(target.ref[i])
+        while e < len(chrom_exons) and chrom_exons[e][0] < end:
+            heapq.heappush(active, (chrom_exons[e][1], chrom_exons[e][2]))
+            e += 1
+        while active and active[0][0] <= start:
+            heapq.heappop(active)
+        for gene in {gene for _, gene in active}:
+            by_gene[gene].append(i)
+    return by_gene
+
+
+def evaluate_genes(overlapping_sites, target, gt, exons):
+    """Score the phasing of heterozygous sites that share a gene.
+
+    Whether two heterozygous sites in one gene are in cis or in trans is what
+    decides a compound-heterozygous call, so for each gene the sites overlapping
+    any of its exons are taken in position order and every consecutive pair is
+    checked against the truth.
+
+    Genes and sites are counted over *every* heterozygous site, phased or not.
+    That keeps the denominator a property of the call set and the annotation
+    alone, so two phasing tools run on the same VCF are compared over the same
+    genes; how much each of them managed to phase shows up in the split between
+    resolved and unresolved connections instead.  A pair is unresolved whenever
+    it carries no cis/trans claim -- either side unphased or unmatched in the
+    truth, or the two sides in different phase sets.
+    """
+    # truth counterpart of every site the comparison can score
+    scorable = {}
+    blocks, _, _ = group_blocks(overlapping_sites, target, gt)
+    for block in blocks.values():
+        for i, j in block:
+            scorable[int(i)] = int(j)
+
+    by_chrom: Dict[str, List[int]] = defaultdict(list)
+    for i in range(len(target)):
+        by_chrom[target.chromosome[i]].append(i)
+
+    result = GeneResult(per_gene=[], positions=[])
+    for chrom, indices in by_chrom.items():
+        genes = genes_by_variant(indices, target, exons.get(chrom, ()))
+        for gene, sites in sorted(genes.items()):
+            sites = sorted(set(sites))
+            if len(sites) < 2:
+                result.single_site_genes += 1
+                continue
+            result.genes += 1
+            result.sites += len(sites)
+            result.sites_scorable += sum(1 for i in sites if i in scorable)
+
+            connections = errors = unresolved = 0
+            for m in range(len(sites) - 1):
+                a, b = sites[m], sites[m + 1]
+                if a not in scorable or b not in scorable:
+                    unresolved += 1
+                    continue
+                ja, jb = scorable[a], scorable[b]
+                if (target.phase_block[a] != target.phase_block[b] or
+                        gt.phase_block[ja] != gt.phase_block[jb]):
+                    unresolved += 1
+                    continue
+                connections += 1
+                if (target.allele_a[a] == gt.allele_a[ja]) != (target.allele_a[b] == gt.allele_a[jb]):
+                    errors += 1
+                    result.positions.append(interval(target, a, b))
+
+            result.connections += connections
+            result.errors += errors
+            result.unresolved += unresolved
+            if errors:
+                result.genes_with_error += 1
+            elif unresolved:
+                result.genes_unresolved += 1
+            else:
+                result.genes_correct += 1
+            result.per_gene.append((chrom, gene, len(sites), connections, errors, unresolved))
     return result
 
 
@@ -480,7 +749,7 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
             result.junctions += 1
             if agree[k] != agree[k + 1]:
                 result.errors += 1
-                result.positions.append(interval(target, chain[k], chain[k + 1]))
+                result.positions.append(interval(target, chain[k][0], chain[k + 1][0]))
     return result
 
 
@@ -513,7 +782,7 @@ def report_switches(result, header):
 
 
 def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
-           new_connections=None, names=('truth', 'query')):
+           new_connections=None, sv=None, genes=None, names=('truth', 'query')):
     gt_name, target_name = names
     print('VARIANT COUNTS (heterozygous / all): ')
     for name, vs in ((gt_name, gt), (target_name, target)):
@@ -533,6 +802,22 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
     print_stat('--> covered variants', within.covered_variants)
 
     report_switches(within, 'WITHIN PHASE BLOCKS')
+
+    if sv is not None:
+        print()
+        print('SV PHASING (SNP-anchored):'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
+        print_stat('non-SNPs in the call set', sv.total)
+        print_stat('--> evaluated', sv.svs)
+        print_stat('anchored connections', sv.connections)
+        print_stat('connection errors', sv.errors)
+        print_stat('connection error rate', percent(sv.errors, sv.connections))
+        print_stat('--> SVs correct', sv.correct)
+        print_stat('--> SVs flipped', sv.flipped)
+        print_stat('--> SVs ambiguous, anchors disagree', sv.ambiguous)
+        print_stat('--> SVs anchored on one side only', sv.one_sided)
+        print_stat('SVs skipped, no anchoring SNP in block', sv.no_anchor)
+        for name, count in sorted(sv.by_type.items()):
+            print_stat(f'by type: {name}', count)
 
     print()
     print('BETWEEN PHASE BLOCKS:'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
@@ -556,6 +841,21 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
                    n.structural_joins - n.junctions - n.no_truth_frame)
         print_stat('--> not assessed, no truth frame', n.no_truth_frame)
         print_stat('variants skipped, unphased in baseline', n.skipped_no_baseline_phase)
+
+    if genes is not None:
+        print()
+        print('COMPOUND HETEROZYGOSITY (per gene):'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
+        print_stat('genes with >=2 heterozygous sites', genes.genes)
+        print_stat('--> heterozygous sites in them', genes.sites)
+        print_stat('--> of those, scorable', genes.sites_scorable)
+        print_stat('connections evaluated', genes.connections)
+        print_stat('connection errors', genes.errors)
+        print_stat('connection error rate', percent(genes.errors, genes.connections))
+        print_stat('connections unresolved', genes.unresolved)
+        print_stat('--> genes entirely correct', genes.genes_correct)
+        print_stat('--> genes with a wrong connection', genes.genes_with_error)
+        print_stat('--> genes only partly resolved', genes.genes_unresolved)
+        print_stat('genes with a single heterozygous site', genes.single_site_genes)
 
     report_switches(chromosome_wide, 'CHROMOSOME-WIDE (blocks concatenated)')
 
@@ -587,15 +887,28 @@ def main(argv):
                         help='Write misoriented block junctions to this BED file')
     parser.add_argument('--new_connection_bed',
                         help='Write misoriented new connections to this BED file')
+    parser.add_argument('--sv_error_bed',
+                        help='Write SV-to-anchor connections that disagree to this BED file')
     parser.add_argument('--evaluate_sv', action='store_true', default=False,
-                        help='Evaluate structural variants instead of SNPs')
+                        help='Additionally score how each non-SNP is placed relative to the '
+                             'nearest SNP on either side. Works for any phasing tool that '
+                             'writes FORMAT/PS (HP tags are not read).')
+    parser.add_argument('--min_sv_length', type=int, default=0,
+                        help='With --evaluate_sv, only score non-SNPs whose longest allele is at '
+                             'least this many bp (default: all non-SNPs)')
     parser.add_argument('--baseline_vcf', required=False,
                         help='Phasing the target VCF was built on, e.g. the pre-methylation '
                              'call set. Given this, the error rate of the connections the '
                              'target newly established is reported.')
     parser.add_argument('--annotations', required=False,
-                        help='Bed file with genome annotations, e.g., CDS, '
-                             'for which to evaluate the phasing of compound heterozygous variants')
+                        help='4-column BED (chrom, start, end, gene) of exons; one gene may span '
+                             'many rows. Scores whether the heterozygous sites sharing a gene are '
+                             'put in the right cis/trans arrangement, which is what a compound '
+                             'heterozygous call rests on. May be genome-wide.')
+    parser.add_argument('--gene_tsv',
+                        help='With --annotations, write per-gene results to this TSV')
+    parser.add_argument('--gene_error_bed',
+                        help='With --annotations, write wrongly connected within-gene pairs here')
     args = parser.parse_args()
 
     load_kwargs = dict(sample=args.sample, only_snvs=args.only_snvs,
@@ -618,7 +931,17 @@ def main(argv):
         baseline_of = baseline_block_map(target, baseline, match=args.match)
         new_connections = evaluate_new_junctions(overlapping_sites, target, gt, baseline_of)
 
-    report(target, gt, overlapping_sites, within, junctions, chromosome_wide, new_connections)
+    sv = None
+    if args.evaluate_sv:
+        sv = evaluate_svs(overlapping_sites, target, gt, min_sv_length=args.min_sv_length)
+
+    genes = None
+    if args.annotations:
+        exons = load_annotations(args.annotations, set(target.chromosome.tolist()))
+        genes = evaluate_genes(overlapping_sites, target, gt, exons)
+
+    report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
+           new_connections, sv, genes)
 
     if args.switch_error_bed:
         write_bed(args.switch_error_bed, within.switch_positions, 'switch')
@@ -626,6 +949,16 @@ def main(argv):
         write_bed(args.junction_error_bed, junctions.positions, 'junction')
     if args.new_connection_bed and new_connections is not None:
         write_bed(args.new_connection_bed, new_connections.positions, 'new_connection')
+    if args.sv_error_bed and sv is not None:
+        write_bed(args.sv_error_bed, sv.positions, 'sv_connection')
+    if args.gene_error_bed and genes is not None:
+        write_bed(args.gene_error_bed, genes.positions, 'gene_connection')
+    if args.gene_tsv and genes is not None:
+        with open(args.gene_tsv, 'w') as out:
+            print('chrom', 'gene', 'het_sites', 'connections', 'errors', 'unresolved',
+                  sep='\t', file=out)
+            for row in genes.per_gene:
+                print(*row, sep='\t', file=out)
 
 
 if __name__ == '__main__':
