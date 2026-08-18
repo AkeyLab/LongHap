@@ -61,12 +61,20 @@ LongHap's only requirements are Python >= 3.11 with the following packages insta
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
-**Note for macOS and Linux ARM users:** `parasail` publishes no wheel for Apple Silicon
-(`macosx_arm64`) or `linux-aarch64`, so pip builds it from source on those platforms and needs C
-build tools:
+<details>
+<summary>Note for Apple Silicon and other ARM users</summary>
+
+`parasail` publishes no wheel for Apple Silicon
+(`macosx_*_arm64`) or `linux-aarch64`, so pip needs to build it from source on
+those platforms and requires GNU autotools. 
+
+On macOS (Apple Silicon):
 ```commandline
 brew install autoconf automake libtool
 ```
+
+The github actions CI shows this working on `macos-latest`.
+<details>
 
 ### Exemplary Usage
 
