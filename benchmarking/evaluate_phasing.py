@@ -10,13 +10,12 @@ def load_phasing(vcf_f, chrom):
     Load phased heterozygous variants from a VCF file for a specific chromosome.
     """
     variant_type = []
-    reference = []
-    alternative = []
     positions = []
     genotypes = []
     phased = []
     phase_block = []
-
+    allele_a = []
+    allele_b = []
     variant_calls = VCF(vcf_f)
 
     # only consider heterozygous variants
@@ -25,13 +24,14 @@ def load_phasing(vcf_f, chrom):
             pos = variant.POS
             ref = variant.REF.upper()
             alt = [a.upper() for a in variant.ALT]
+            alleles = [ref] + alt
             gt = variant.genotypes[0][:2]
+            al_a = alleles[gt[0]]
+            al_b = alleles[gt[1]]
             is_phased = variant.genotypes[0][2]
             ps = variant.format('PS')[0][0] if variant.format('PS') is not None else np.nan
             if len(alt) > 1:
-                print(pos)
-                raise ValueError("Multi-allelic variants are not supported, "
-                                 f"please split {vcf_f} into bi-allelic variants first, using bcftools norm -m -any")
+                variant_type.append('Multi')
 
             elif len(ref) == len(alt[0]) == 1:
                 variant_type.append('SNP')
@@ -45,17 +45,17 @@ def load_phasing(vcf_f, chrom):
             genotypes.append(gt)
             phased.append(is_phased)
             phase_block.append(ps)
-            reference.append(ref)
-            alternative.append(alt[0])
+            allele_a.append(al_a)
+            allele_b.append(al_b)
 
     variant_type = np.array(variant_type)
     positions = np.array(positions)
     genotypes = np.array(genotypes)
     phased = np.array(phased)
     phase_block = np.array(phase_block)
-    reference = np.array(reference)
-    alternative = np.array(alternative)
-    return variant_type, positions, genotypes, phased, phase_block, reference, alternative
+    allele_a = np.array(allele_a)
+    allele_b = np.array(allele_b)
+    return variant_type, positions, genotypes, phased, phase_block, allele_a, allele_b
 
 
 def main(argv):
@@ -74,9 +74,9 @@ def main(argv):
     args = parser.parse_args()
 
     (target_variant_type, target_positions, target_genotypes,
-     target_phased, target_phase_block, target_reference, target_alternative) = load_phasing(args.vcf, args.chrom)
+     target_phased, target_phase_block, target_allele_a, target_allele_b) = load_phasing(args.vcf, args.chrom)
     (gt_variant_type, gt_positions, gt_genotypes,
-     gt_phased, gt_phase_block, gt_reference, gt_alternative) = load_phasing(args.gt_vcf, args.chrom)
+     gt_phased, gt_phase_block, gt_allele_a, gt_allele_b) = load_phasing(args.gt_vcf, args.chrom)
     breakpoint()
 
 
