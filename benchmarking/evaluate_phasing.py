@@ -5,7 +5,7 @@ from cyvcf2 import VCF
 import numpy as np
 
 
-def load_phasing(vcf_f, chrom):
+def load_phasing(vcf_f):
     """
     Load phased heterozygous variants from a VCF file for a specific chromosome.
     """
@@ -62,7 +62,6 @@ def main(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("--vcf", required=True, help='VCF to evaluate')
     parser.add_argument("--gt_vcf", required=True, help='Ground truth VCF')
-    parser.add_argument("--chrom", required=True, help='Chromosome to evaluate')
     parser.add_argument('--evaluate_sv', action='store_true', default=False,
                         help='Evaluate structural variants instead of SNPs')
     parser.add_argument('--baseline_vcf', required=False,
@@ -74,9 +73,9 @@ def main(argv):
     args = parser.parse_args()
 
     (target_variant_type, target_positions, target_genotypes,
-     target_phased, target_phase_block, target_allele_a, target_allele_b) = load_phasing(args.vcf, args.chrom)
+     target_phased, target_phase_block, target_allele_a, target_allele_b) = load_phasing(args.vcf)
     (gt_variant_type, gt_positions, gt_genotypes,
-     gt_phased, gt_phase_block, gt_allele_a, gt_allele_b) = load_phasing(args.gt_vcf, args.chrom)
+     gt_phased, gt_phase_block, gt_allele_a, gt_allele_b) = load_phasing(args.gt_vcf)
     breakpoint()
 
 
