@@ -1750,12 +1750,14 @@ class LongHap:
                 gt = v.genotypes[0][:2]
                 gt.append(False)
                 v.genotypes = [gt]
+                v.set_format("PS", np.array([np.nan]))
                 vcf_phased.write_record(v)
             else:
                 if self.haplotypes[0, v_idx] == -1:
                     gt = self.idx_variant_mapping[v_idx]['gt'].copy()
                     gt.append(False)
                     v.genotypes = [gt]
+                    v.set_format("PS", np.array([np.nan]))
                     vcf_phased.write_record(v)
                 else:
                     # increment phase set ID
