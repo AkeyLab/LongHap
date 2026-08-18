@@ -30,7 +30,7 @@ def load_phasing(vcf_f, chrom):
             al_a = alleles[gt[0]]
             al_b = alleles[gt[1]]
             is_phased = variant.genotypes[0][2]
-            ps = variant.format('PS')[0][0] if variant.format('PS') is not None else np.nan
+            ps = variant.format('PS')[0][0] if 'PS' in variant.FORMAT else np.nan
             if len(alt) > 1:
                 variant_type.append('Multi')
 
