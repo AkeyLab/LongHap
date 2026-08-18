@@ -70,7 +70,7 @@ def get_overlapping_sites(positions1, positions2, allele_a1, allele_a2, allele_b
                     (allele_a1[i] == allele_b2[idx2] and allele_b1[i] == allele_a2[idx2])) and
                     phased1[i] and phased2[idx2]):
                 overlapping_sites.append((pos1, i, idx2))
-    np.array(overlapping_sites)
+    overlapping_sites = np.array(overlapping_sites)
     return overlapping_sites
 
 
