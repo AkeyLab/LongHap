@@ -17,10 +17,9 @@ def load_phasing(vcf_f, chrom):
     allele_a = []
     allele_b = []
     variant_calls = VCF(vcf_f)
-    breakpoint()
 
     # only consider heterozygous variants
-    for variant in variant_calls(chrom):
+    for variant in variant_calls:
         if variant.gt_types == 1 and -1 not in variant.genotypes[0][:2]:
             pos = variant.POS
             ref = variant.REF.upper()
