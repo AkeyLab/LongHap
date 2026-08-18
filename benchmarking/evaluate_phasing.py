@@ -58,6 +58,22 @@ def load_phasing(vcf_f):
     return variant_type, positions, genotypes, phased, phase_block, allele_a, allele_b
 
 
+def get_overlapping_sites(positions1, positions2, allele_a1, allele_a2, allele_b1, allele_b2, phased1, phased2):
+    """
+    Get overlapping sites between two sets of phased variants.
+    """
+    overlapping_sites = []
+    for i, pos1 in enumerate(positions1):
+        if pos1 in positions2:
+            idx2 = np.where(positions2 == pos1)[0][0]
+            if (((allele_a1[i] == allele_a2[idx2] and allele_b1[i] == allele_b2[idx2]) or
+                    (allele_a1[i] == allele_b2[idx2] and allele_b1[i] == allele_a2[idx2])) and
+                    phased1[i] and phased2[idx2]):
+                overlapping_sites.append((pos1, i, idx2))
+    np.array(overlapping_sites)
+    return overlapping_sites
+
+
 def main(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("--vcf", required=True, help='VCF to evaluate')
@@ -76,6 +92,8 @@ def main(argv):
      target_phased, target_phase_block, target_allele_a, target_allele_b) = load_phasing(args.vcf)
     (gt_variant_type, gt_positions, gt_genotypes,
      gt_phased, gt_phase_block, gt_allele_a, gt_allele_b) = load_phasing(args.gt_vcf)
+    overlapping_sites = get_overlapping_sites(target_positions, gt_positions, target_allele_a, gt_allele_a,
+                                              target_allele_b, gt_allele_b, target_phased, gt_phased)
     breakpoint()
 
 
