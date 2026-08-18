@@ -1776,10 +1776,15 @@ class LongHap:
         """
         start = 0
         haplotype_blocks = open(self.output_blocks, 'w')
+        while np.all(self.transition_matrix[:, :, start] == 0.5):
+            start += 1
         for end in self.block_ends:
             haplotype_blocks.write(f'{self.chrom}\t{self.idx_variant_mapping[start]["POS"]}\t'
                                    f'{self.idx_variant_mapping[end]["POS"]}\n')
             start = end + 1
+            while start < self.transition_matrix.shape[-1] and np.all(self.transition_matrix[:, :, start] == 0.5):
+                start += 1
+
         haplotype_blocks.close()
 
     def get_methylation_based_haplotag(self, read_name, meth_hap):
