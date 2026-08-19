@@ -1652,14 +1652,14 @@ class LongHap:
 
                     # if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
                     #     self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
-                    prev_state = self.read_states[read_name].get(str(n - 1))
-                    if prev_state is not None and prev_state != -1 and str(n - 1) in query_idx_vars:
-                        self.transition_matrix[prev_state, state, n - 1] += 1
-
-                    if n + 1 not in idx_to_realign:
-                        next_state = self.read_states[read_name].get(str(n + 1))
-                        if next_state is not None and next_state != -1 and str(n + 1) in query_idx_vars:
-                            self.transition_matrix[state, next_state, n] += 1
+                    # prev_state = self.read_states[read_name].get(str(n - 1))
+                    # if prev_state is not None and prev_state != -1 and str(n - 1) in query_idx_vars:
+                    #     self.transition_matrix[prev_state, state, n - 1] += 1
+                    #
+                    # if n + 1 not in idx_to_realign:
+                    #     next_state = self.read_states[read_name].get(str(n + 1))
+                    #     if next_state is not None and next_state != -1 and str(n + 1) in query_idx_vars:
+                    #         self.transition_matrix[state, next_state, n] += 1
         if self.seqtech == 'ont':
             depth = strands.sum(axis=1)  # (2, n_variants)
             one_sided = (strands == 0).any(axis=(0, 1)) & (depth.min(axis=0) > 0)
