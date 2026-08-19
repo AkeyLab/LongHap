@@ -1804,7 +1804,7 @@ class LongHap:
                     # increment phase set ID
                     if v_idx > block_end:
                         block_id = v.POS
-                        block_end = block_ends.popleft()
+                        block_end = block_ends.popleft() if block_ends else v_idx
                     # assign phase set
                     if block_id is None:
                         block_id = v.POS
