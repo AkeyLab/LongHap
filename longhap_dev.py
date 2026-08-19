@@ -1652,18 +1652,18 @@ class LongHap:
 
                     self.allele_coverage[state, n] += 1
 
-                    # if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
-                    #     self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
-                    # the main scan carried prev_state = None past this variant, so
-                    # *both* pairs touching n were skipped there and both need repair.
-                    prv = self.read_states[read_name].get(str(n - 1))
-                    if prv is not None and prv != -1:
-                        self.transition_matrix[prv, state, n - 1] += 1
-                    # a downstream neighbour that also needs realignment is still None
-                    # here; it adds this same pair through its own upstream repair.
-                    nxt = self.read_states[read_name].get(str(n + 1))
-                    if nxt is not None and nxt != -1:
-                        self.transition_matrix[state, nxt, n] += 1
+                    if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
+                        self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
+                    # # the main scan carried prev_state = None past this variant, so
+                    # # *both* pairs touching n were skipped there and both need repair.
+                    # prv = self.read_states[read_name].get(str(n - 1))
+                    # if prv is not None and prv != -1:
+                    #     self.transition_matrix[prv, state, n - 1] += 1
+                    # # a downstream neighbour that also needs realignment is still None
+                    # # here; it adds this same pair through its own upstream repair.
+                    # nxt = self.read_states[read_name].get(str(n + 1))
+                    # if nxt is not None and nxt != -1:
+                    #     self.transition_matrix[state, nxt, n] += 1
         if self.seqtech == 'ont':
             depth = strands.sum(axis=1)  # (2, n_variants)
             one_sided = (strands == 0).any(axis=(0, 1)) & (depth.min(axis=0) > 0)
