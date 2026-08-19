@@ -830,7 +830,6 @@ class LongHap:
         df_hap['hap'] = hap
         df_hap['mod_count'] = mod
         df_hap['unmod_count'] = cov - mod
-        breakpoint()
         df_hap['ratio'] = np.where(cov > 0, (mod / cov) * 100, np.nan)
         df_hap['coverage'] = cov
         return df_hap
@@ -1023,7 +1022,7 @@ class LongHap:
             meth_hap1 = methylation_probs[reads_hap1].sum(axis=0)
             unmeth_hap1 = unmethylated_probs[reads_hap1].sum(axis=0)
             # methylated sites must have a probability greater than 0.5 and an LLR > 3
-            meth_states_hap1 = np.where((meth_hap1 > np.log10(0.5)) & (meth_hap1 - unmeth_hap1 > 3), 1, 0)
+            meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > 3, 1, 0)
             # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
             # meth_states_hap1 = np.where((unmeth_hap1 > np.log10(0.5)) & (unmeth_hap1 - meth_hap1 > 3), 0, meth_states_hap1)
 
@@ -1031,7 +1030,7 @@ class LongHap:
             unmeth_hap2 = unmethylated_probs[reads_hap2].sum(axis=0)
 
             # methylated sites must have a probability greater than 0.5 and an LLR > 3
-            meth_states_hap2 = np.where((meth_hap2 > np.log10(0.5)) & (meth_hap2 - unmeth_hap2 > 3), 1, 0)
+            meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, 0)
             # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
             # meth_states_hap2 = np.where((unmeth_hap2 > np.log10(0.5)) & (unmeth_hap2 - meth_hap2 > 3), 0, meth_states_hap2)
 
