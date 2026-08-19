@@ -16,16 +16,8 @@ import json
 import re
 from scipy.special import logsumexp
 import parasail
+import contextlib, io
 logging.getLogger(__name__)
-
-
-class NestedDict:
-    def __init__(self):
-        pass
-
-    @classmethod
-    def nested_defaultdict(cls):
-        return defaultdict(list)
 
 
 class LongHap:
@@ -36,7 +28,8 @@ class LongHap:
                  output_differentially_methylated_sites=None,
                  output_unphaseable_variants=None, snvs_only=False, multiallelics=False,
                  use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh_haplotagging=3,
-                 sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_base_quality=0, min_mapq=20,
+                 sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_allele_count_meth=2,
+                 min_base_quality=0, min_mapq=20,
                  flank_snv=33, flank_indel=100, seqtech='pacbio'):
         self.chrom = chrom
         self.snvs_only = snvs_only
@@ -45,7 +38,7 @@ class LongHap:
         self.bam = bam
         self.reference_path = reference_path
         self.methylation_calls_f = methylation_calls_f
-        self.prev_methylations = None
+        self.prev_methylations = dict()
         self.use_all_methylated_sites = use_all_methylated_sites
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
@@ -53,18 +46,20 @@ class LongHap:
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
+        for attr in ('output_transition_matrix', 'output_transition_matrix_meth',
+                     'output_allele_coverage', 'output_unphaseable_variants'):
+            p = getattr(self, attr)
+            if p is not None and not p.endswith('.npz'):
+                setattr(self, attr, p + '.npz')
         self.output_read_assignments = output_read_assignments
-        self.output_transition_matrix = output_transition_matrix
-        self.output_allele_coverage = output_allele_coverage
         self.output_read_states = output_read_states
         self.output_variant_read_mapping = output_variant_read_mapping
-        self.output_transition_matrix_meth = output_transition_matrix_meth
         self.output_differentially_methylated_sites = output_differentially_methylated_sites
-        self.output_unphaseable_variants = output_unphaseable_variants
         self.sample = sample
         self.force = force
         self.max_allele_length = max_allele_length
         self.min_allele_count = min_allele_count
+        self.min_allele_count_meth = min_allele_count_meth
         self.min_base_quality = min_base_quality
         self.min_mapq = min_mapq
         self.flank_snv = flank_snv
@@ -92,7 +87,7 @@ class LongHap:
         self.idx_variant_mapping, self.variant_idx_mapping, self.variant_type = self.get_heterozygous_variants()
         self.num_variants = len(self.idx_variant_mapping)
         # intialize transition_matrix
-        self.transition_matrix = np.zeros((2, 2, self.num_variants - 1)) + 1e-20
+        self.transition_matrix = np.zeros((2, 2, max(self.num_variants - 1, 0))) + 1e-20
         self.allele_coverage = np.zeros((2, self.num_variants))
         logging.info(f'Loading read alignments from {self.bam}')
         if not os.path.isfile(self.bam):
@@ -168,34 +163,34 @@ class LongHap:
         Infer transition matrix from methylation calls
         """
         # check if necessary information for methylation phasing are given and if intermediate files can be re-used
-        # if (self.methylation_calls_f is not None and
-        #     (self.output_transition_matrix_meth is None or not os.path.isfile(self.output_transition_matrix_meth) or
-        #         self.force)):
-        logging.info(f'Loading methylation calls from {self.methylation_calls_f}')
-        if not os.path.isfile(self.methylation_calls_f):
-            logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
-            sys.exit(1)
-        self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
-                                             names=['chrom', 'start', 'end', 'score', 'hap',
-                                                    'coverage', 'mod_count', 'unmod_count',
-                                                    'ratio'], engine='pyarrow', skiprows=7)
-        # get putative differentially methylated sites
-        self.methylation_calls = self.methylation_calls[(self.methylation_calls.chrom == self.chrom) &
-                                                        (self.methylation_calls.coverage >= 10) &
-                                                        (self.methylation_calls.ratio > 20) &
-                                                        (self.methylation_calls.ratio < 80)]
-        logging.info('Complementing variant transition matrix with methylation data')
-        # fill in transition matrix
-        self.get_methylation_transitions_helper()
-        if len(self.differentially_methylated_sites) > 0:
-            self.differentially_methylated_sites = pd.concat(
-                self.differentially_methylated_sites).sort_values(['chrom', 'start', 'hap']).drop_duplicates()
-        else:
-            self.differentially_methylated_sites = pd.DataFrame()
-        # elif self.methylation_calls_f is not None and os.path.isfile(self.output_transition_matrix_meth):
-        #     logging.info(
-        #         f'Loading methylation complemented transition matrix from {self.output_transition_matrix_meth}')
-        #     self.transition_matrix = np.load(self.output_transition_matrix_meth)['arr_0']
+        if (self.methylation_calls_f is not None and
+            (self.output_transition_matrix_meth is None or not os.path.isfile(self.output_transition_matrix_meth) or
+                self.force)):
+            logging.info(f'Loading methylation calls from {self.methylation_calls_f}')
+            if not os.path.isfile(self.methylation_calls_f):
+                logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
+                sys.exit(1)
+            self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
+                                                 names=['chrom', 'start', 'end', 'score', 'hap',
+                                                        'coverage', 'mod_count', 'unmod_count',
+                                                        'ratio'], engine='pyarrow', comment='#')
+            # get putative differentially methylated sites
+            self.methylation_calls = self.methylation_calls[(self.methylation_calls.chrom == self.chrom) &
+                                                            (self.methylation_calls.coverage >= 10) &
+                                                            (self.methylation_calls.ratio > 20) &
+                                                            (self.methylation_calls.ratio < 80)]
+            logging.info('Complementing variant transition matrix with methylation data')
+            # fill in transition matrix
+            self.get_methylation_transitions_helper()
+            if len(self.differentially_methylated_sites) > 0:
+                self.differentially_methylated_sites = pd.concat(
+                    self.differentially_methylated_sites).sort_values(['chrom', 'start', 'hap']).drop_duplicates()
+            else:
+                self.differentially_methylated_sites = pd.DataFrame()
+        elif self.methylation_calls_f is not None and os.path.isfile(self.output_transition_matrix_meth):
+            logging.info(
+                f'Loading methylation complemented transition matrix from {self.output_transition_matrix_meth}')
+            self.transition_matrix = np.load(self.output_transition_matrix_meth)['arr_0']
 
     def phase(self):
         """
@@ -386,7 +381,7 @@ class LongHap:
                                                                                                 query_offset, operation,
                                                                                                 length)
         if qpos == -1:
-            return -1
+            return -1, qpos, r_idx, operation, length
 
         state = None
         # SNV
@@ -433,14 +428,15 @@ class LongHap:
 
             if qpos == -1 or q_after == -1 or q_after <= qpos:
                 state = -1
-            insertion_seq = query_sequence[qpos + 1:q_after]
-            if insertion_seq == "":
-                state = 0
-            elif insertion_seq == allele_b[len(allele_ref):]:
-                state = 1
             else:
-                # do realignment
-                pass
+                insertion_seq = query_sequence[qpos + 1:q_after]
+                if insertion_seq == "":
+                    state = 0
+                elif insertion_seq == allele_b[len(allele_ref):]:
+                    state = 1
+                else:
+                    # do realignment
+                    pass
 
         # deletion
         elif allele_ref == allele_a and len(allele_ref) > len(allele_b):
@@ -472,7 +468,7 @@ class LongHap:
         dels = np.sum([length for op, length in cigartuples if op == 2])
         total = matches + mismatches + ins + dels
         if total == 0:
-            return 5, 1
+            return 5, 1, 0, 0
         indel_rate = (ins + dels) / total
         mismatch_rate = mismatches / total
         if indel_rate < 0.005:
@@ -700,7 +696,7 @@ class LongHap:
         :param idx: int, index of target transition that was inferred from methylation dats
         :return: np.array, modified phase transition matrix
         """
-        min_cov = max(self.min_allele_count, 1)
+        min_cov = max(self.min_allele_count, self.min_allele_count_meth)
         if (hap1_cov[i] < min_cov or hap1_cov[i + 1] < min_cov or
                 hap2_cov[i] < min_cov or hap2_cov[i + 1] < min_cov):
             pass
@@ -709,7 +705,7 @@ class LongHap:
             t2 = self.calculate_transition_probability_from_methylation_helper(hap2, i)
             cov_hap1 = (hap1_cov[i] + hap1_cov[i + 1]) / 2
             cov_hap2 = (hap2_cov[i] + hap2_cov[i + 1]) / 2
-            if np.all(t1 == 0.5) and np.all(t2 == 0.5):
+            if np.allclose(t1, 0.5) and np.allclose(t2, 0.5):
                 pass
             else:
                 self.transition_matrix[:, :, idx] = (t1 * cov_hap1 + t2 * cov_hap2) / (cov_hap1 + cov_hap2 + 1e-100)
@@ -889,26 +885,14 @@ class LongHap:
                     read.is_qcfail or read.mapping_quality < self.min_mapq or not read.has_tag("MM")):
                 continue
             read_name = read.query_name
-            if self.prev_methylations is not None:
-                if read_name in self.prev_methylations:
-                    (methylations, cigar, read_start, read_end, ref_offset,
-                     query_offset, operation, length, mm_tags, ml_tags) = self.prev_methylations[read_name]
-                    (read_methylation, cigar, ref_offset,
-                     query_offset, operation, length) = self.get_read_methylation(methylations, positions, cigar,
-                                                                                  read_start, read_end, ref_offset,
-                                                                                  query_offset, operation,
-                                                                                  length, mm_tags, ml_tags)
-                else:
-                    (cigar, read_start, read_end, ref_offset, query_offset,
-                     operation, length, mm_tags, ml_tags) = self.get_read_info(read)
-                    (read_methylation, cigar, ref_offset,
-                     query_offset, operation, length) = self.get_read_methylation({}, positions, cigar,
-                                                                                  read_start, read_end, ref_offset,
-                                                                                  query_offset, operation,
-                                                                                  length, mm_tags, ml_tags)
-                self.prev_methylations[read_name] = ({m_pos: m for m_pos, m in zip(positions, read_methylation)},
-                                                           cigar, read_start, read_end, ref_offset, query_offset,
-                                                           operation, length, mm_tags, ml_tags)
+            if read_name in self.prev_methylations:
+                (methylations, cigar, read_start, read_end, ref_offset,
+                 query_offset, operation, length, mm_tags, ml_tags) = self.prev_methylations[read_name]
+                (read_methylation, cigar, ref_offset,
+                 query_offset, operation, length) = self.get_read_methylation(methylations, positions, cigar,
+                                                                              read_start, read_end, ref_offset,
+                                                                              query_offset, operation,
+                                                                              length, mm_tags, ml_tags)
             else:
                 (cigar, read_start, read_end, ref_offset, query_offset,
                  operation, length, mm_tags, ml_tags) = self.get_read_info(read)
@@ -917,6 +901,9 @@ class LongHap:
                                                                               read_start, read_end, ref_offset,
                                                                               query_offset, operation,
                                                                               length, mm_tags, ml_tags)
+                self.prev_methylations[read_name] = ({m_pos: m for m_pos, m in zip(positions, read_methylation)},
+                                                           cigar, read_start, read_end, ref_offset, query_offset,
+                                                           operation, length, mm_tags, ml_tags)
 
             # get allele states
             read_idx_states = np.zeros(idx_var_b - idx_var_a + 1).astype(int) - 1
@@ -939,8 +926,8 @@ class LongHap:
                     q_idx = 0
                     operation = None
                     length = 0
-                    if i not in variant_homopolymer_mapping:
-                        variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
+                    if n not in variant_homopolymer_mapping:
+                        variant_homopolymer_mapping[n] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
                                                                              k=4)
                     state, qpos, _, _, _ = self.get_state_at_variant(read_sequence, read_base_qualities, cigar,
                                                                      read_start, r_idx, q_idx, operation, length,
@@ -1141,8 +1128,7 @@ class LongHap:
         """
         uncertain_transitions = []
         for i in range(transition_matrix.shape[2]):
-            if ((transition_matrix[0, :, i].min() == 0.5 and transition_matrix[0, :, i].max() == 0.5) and
-                    (transition_matrix[1, :, i].min() == 0.5 and transition_matrix[1, :, i].max() == 0.5)):
+            if np.allclose(transition_matrix[:, :, i], 0.5):
                 uncertain_transitions.append(i)
         uncertain_transitions = deque(uncertain_transitions)
         return uncertain_transitions
@@ -1199,11 +1185,11 @@ class LongHap:
             # paths directly involving the edge from B1 to B2 divided by all possible paths exciting B1
             new_t1[1, 1] = (t1[1, 1] * t2[1, 0] * t3[1, 0] + t1[1, 1] * t2[1, 1] * t3[1, 1]) / \
                            (t1[1, 1] * t2[1, 0] * t3[1, 0] + t1[1, 1] * t2[1, 1] * t3[1, 1] +
-                            t1[1, 0] * t2[0, 0] * t3[1, 0] * t1[1, 0] * t2[0, 1] * t3[1, 1])
+                            t1[1, 0] * t2[0, 0] * t3[1, 0] + t1[1, 0] * t2[0, 1] * t3[1, 1])
             # B1 to A2 must be the complement of B1 to B2
             new_t1[1, 0] = (t1[1, 0] * t2[0, 0] * t3[1, 0] + t1[1, 0] * t2[0, 1] * t3[1, 1]) / \
                            (t1[1, 1] * t2[1, 0] * t3[1, 0] + t1[1, 1] * t2[1, 1] * t3[1, 1] +
-                            t1[1, 0] * t2[0, 0] * t3[1, 0] * t1[1, 0] * t2[0, 1] * t3[1, 1])
+                            t1[1, 0] * t2[0, 0] * t3[1, 0] + t1[1, 0] * t2[0, 1] * t3[1, 1])
 
             # paths directly involving A2 to A3 divided by all paths traversing A2
             new_t2[0, 0] = (t1[0, 0] * t2[0, 0] * t3[0, 0] + t1[1, 0] * t2[0, 0] * t3[1, 0]) / \
@@ -1300,7 +1286,7 @@ class LongHap:
         layer_idx_mapping = {layer_idx[i]: i for i in range(len(layer_idx))}
         # direct adjacent transitions
         for i, idx_a in enumerate(layer_idx[:-1]):
-            t = self.transition_matrix[:, :, idx_a]
+            t = self.transition_matrix[:, :, idx_a].copy()
             t = self.mirror_transition(t, normalized=normalized)
             # normalize rows in linear space, then take log
             cov = t.sum(axis=1).max()
@@ -1336,7 +1322,6 @@ class LongHap:
                 neighbors[i].add(ix_b)
                 neighbors[ix_b].add(i)
                 edges.append((i, ix_b))
-                edges.append((ix_b, i))
                 edges.append((ix_b, i))
                 coverage[(i, ix_b)] = cov
                 coverage[(ix_b, i)] = cov
@@ -1489,8 +1474,8 @@ class LongHap:
 
                 # can connect the blocks
                 # TODO only having the first conditions gives a lower error
-                if ((t / t.sum(axis=1, keepdims=True)).max() > 0.5 and
-                        self.transition_matrix[:, :, self.phaseable[idx_b_p - 1]].max() == 0.5):
+                if (not np.allclose(t / t.sum(axis=1, keepdims=True), 0.5) and
+                        np.allclose(self.transition_matrix[:, :, self.phaseable[idx_b_p - 1]], 0.5)):
                     self.transition_matrix[:, :, idx_a] = t
                     new_unphaseable.extend(c_unphaseable)
                     connected += 1
@@ -1506,16 +1491,16 @@ class LongHap:
                 # t3 --> idx_a - 1 to idx_a + 1
                 # new_t1 and new_t2 are uninformative but t3 is informative --> use t3 to connect idx_a - 1 and idx_a + 1
                 # and mark idx_a as uninphaseable
-                if ((np.all(new_t1) == 0.5 or np.all(new_t2) == 0.5 or
+                if ((np.allclose(new_t1, 0.5) or np.allclose(new_t2, 0.5) or
                      (np.unique(new_t1.argmax(axis=1)).shape[0] == 1 and new_t1.max(axis=1).min() > 0) or
                      (np.unique(new_t2.argmax(axis=1)).shape[0] == 1 and new_t2.max(axis=1).min() > 0) or
                      new_t2[new_t1[0, :].argmax(), :].argmax() != t3.argmax()) and
-                        t3.max() > 0.5):
+                        not np.allclose(t3, 0.5)):
                     self.transition_matrix[:, :, self.phaseable[idx_a_p - 1]] = t3
                     new_unphaseable.append(idx_a)
                     connected += 1
                 # new t1 and t2 are informative and in agreement with t3 --> use new t1 and new t2 to connect
-                elif (new_t1.max() > 0.5 and new_t2.max() > 0.5 and
+                elif (not np.allclose(new_t1, 0.5) and not np.allclose(new_t2, 0.5) and
                       new_t2[new_t1[0, :].argmax(), :].argmax() == t3.argmax()):
                     self.transition_matrix[:, :, self.phaseable[idx_a_p - 1]] = new_t1
                     self.transition_matrix[:, :, idx_a] = new_t2
@@ -1530,15 +1515,15 @@ class LongHap:
                     new_t1 = self.mirror_transition(new_t1, normalized=True)
                     new_t2 = self.mirror_transition(new_t2, normalized=True)
 
-                    if ((np.all(new_t1) == 0.5 or np.all(new_t2) == 0.5 or
+                    if ((np.allclose(new_t1, 0.5) or np.allclose(new_t2, 0.5) or
                          (np.unique(new_t1.argmax(axis=1)).shape[0] == 1 and new_t1.max(axis=1).min() > 0) or
                          (np.unique(new_t2.argmax(axis=1)).shape[0] == 1 and new_t2.max(axis=1).min() > 0) or
                          new_t2[new_t1[0, :].argmax(), :].argmax() != t3.argmax()) and
-                            t3.max() > 0.5):
+                            not np.allclose(t3, 0.5)):
                         self.transition_matrix[:, :, idx_a] = t3
                         new_unphaseable.append(self.phaseable[idx_a_p + 1])
                         connected += 1
-                    elif (new_t1.max() > 0.5 and new_t2.max() > 0.5 and
+                    elif (not np.allclose(new_t1, 0.5) and not np.allclose(new_t2, 0.5) and
                           new_t2[new_t1[0, :].argmax(), :].argmax() == t3.argmax()):
 
                         self.transition_matrix[:, :, idx_a] = new_t1
@@ -1584,7 +1569,7 @@ class LongHap:
         if self.seqtech == 'ont':
             strands = np.zeros((2, 2, self.num_variants))
         variant_homopolymer_mapping = {}
-        for read in tqdm(self.alignments.fetch(self.chrom), total=self.alignments.count(self.chrom)):
+        for read in tqdm(self.alignments.fetch(self.chrom)):
             if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or
                     read.mapping_quality < self.min_mapq):
                 continue
@@ -1658,8 +1643,11 @@ class LongHap:
                     if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
                         self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
         if self.seqtech == 'ont':
-            strands /= strands.sum(axis=1, keepdims=True)
-            self.unphaseable = np.unique(np.sort(np.where(strands == 0)[2]))
+            depth = strands.sum(axis=1)  # (2, n_variants)
+            one_sided = (strands == 0).any(axis=(0, 1)) & (depth.min(axis=0) > 0)
+            uncovered = depth.min(axis=0) == 0
+            self.unphaseable = np.union1d(self.unphaseable,
+                                          np.where(one_sided | uncovered)[0])
             self.phaseable = self.phaseable[~np.isin(self.phaseable, self.unphaseable)]
             logging.info(f'Marked {self.unphaseable.shape[0]} variants as not phaseable '
                          f'as they are likely false positive calls only found on one strand')
@@ -1709,30 +1697,31 @@ class LongHap:
         delta[:, 0] = np.log([0.5, 0.5])
         phi[:, 0] = [0, 1]
         transition_matrix = np.log(np.where(transition_matrix == 0, 1e-20, transition_matrix))
-        for l in range(1, delta.shape[1]):
-            if (transition_matrix[0, 0, l - 1] == transition_matrix[0, 1, l - 1] and
-                    transition_matrix[1, 0, l - 1] == transition_matrix[1, 1, l - 1]):
+        if delta.shape[1] > 1:
+            for l in range(1, delta.shape[1]):
+                if (transition_matrix[0, 0, l - 1] == transition_matrix[0, 1, l - 1] and
+                        transition_matrix[1, 0, l - 1] == transition_matrix[1, 1, l - 1]):
 
-                if start_prev_block == l - 1:
-                    start_prev_block = l
-                else:
-                    # backtrace current block
-                    hap = self.backtrace(delta, hap, phi, l - 1, start_prev_block)
-                    start_prev_block = l
-                    self.block_ends.append(self.phaseable[l - 1])
+                    if start_prev_block == l - 1:
+                        start_prev_block = l
+                    else:
+                        # backtrace current block
+                        hap = self.backtrace(delta, hap, phi, l - 1, start_prev_block)
+                        start_prev_block = l
+                        self.block_ends.append(self.phaseable[l - 1])
 
-                # initialize new block
-                delta[:, l] = np.log([0.5, 0.5])
-                phi[:, l] = [0, 1]
-                continue
+                    # initialize new block
+                    delta[:, l] = np.log([0.5, 0.5])
+                    phi[:, l] = [0, 1]
+                    continue
 
-            # calculate path probabilities
-            delta[0, l] = np.max(delta[:, l - 1] + transition_matrix[0, :, l - 1])
-            delta[1, l] = np.max(delta[:, l - 1] + transition_matrix[1, :, l - 1])
+                # calculate path probabilities
+                delta[0, l] = np.max(delta[:, l - 1] + transition_matrix[0, :, l - 1])
+                delta[1, l] = np.max(delta[:, l - 1] + transition_matrix[1, :, l - 1])
 
-            # record pointer
-            phi[0, l] = np.argmax(delta[:, l - 1] + transition_matrix[0, :, l - 1])
-            phi[1, l] = np.argmax(delta[:, l - 1] + transition_matrix[1, :, l - 1])
+                # record pointer
+                phi[0, l] = np.argmax(delta[:, l - 1] + transition_matrix[0, :, l - 1])
+                phi[1, l] = np.argmax(delta[:, l - 1] + transition_matrix[1, :, l - 1])
 
         # backtrace last block
         hap = self.backtrace(delta, hap, phi, l, start_prev_block)
@@ -1784,9 +1773,11 @@ class LongHap:
                 else:
                     # increment phase set ID
                     if v_idx > block_end:
-                        block_id += 1
+                        block_id = v.POS
                         block_end = block_ends.popleft()
                     # assign phase set
+                    if block_id == 0:
+                        block_id = v.POS
                     v.set_format("PS", np.array([block_id]))
                     gt = [self.idx_variant_mapping[v_idx]['gt'][i] for i in self.haplotypes[:, v_idx]]
                     gt.append(True)
@@ -1800,13 +1791,20 @@ class LongHap:
         """
         start = 0
         haplotype_blocks = open(self.output_blocks, 'w')
-        while np.all(self.transition_matrix[:, :, start] == 0.5):
+        while np.allclose(self.transition_matrix[:, :, start], 0.5):
             start += 1
+        start = 0
+        n = self.transition_matrix.shape[-1]
+        while start < n and np.allclose(self.transition_matrix[:, :, start], 0.5):
+            start += 1
+        if start >= n:
+            haplotype_blocks.close()
+            return
         for end in self.block_ends:
             haplotype_blocks.write(f'{self.chrom}\t{self.idx_variant_mapping[start]["POS"]}\t'
                                    f'{self.idx_variant_mapping[end]["POS"]}\n')
             start = end + 1
-            while start < self.transition_matrix.shape[-1] and np.all(self.transition_matrix[:, :, start] == 0.5):
+            while start < self.transition_matrix.shape[-1] and np.allclose(self.transition_matrix[:, :, start], 0.5):
                 start += 1
 
         haplotype_blocks.close()
@@ -1820,6 +1818,8 @@ class LongHap:
         """
         # get indices of read in list
         read_idx = [i for i, r in enumerate(self.methylation_read_assignments[meth_hap]) if r[0] == read_name]
+        if len(read_idx) == 0:
+            return None, None
         # get variant indices
         idx = np.array([self.methylation_read_assignments[meth_hap][r_idx][i][0] for i in range(1, 3) for r_idx in read_idx[:1]])
         # get haplotype states
@@ -1838,7 +1838,8 @@ class LongHap:
         """
         # TODO add PG entry
         bam = pysam.AlignmentFile(self.output_bam, "wb", template=self.alignments)
-        read_assignments = open(self.output_read_assignments, 'w')
+        read_assignments = (open(self.output_read_assignments, 'w')
+                            if self.output_read_assignments else io.StringIO())
         reads_0 = []
         reads_1 = []
         hp1 = 0
@@ -2072,12 +2073,14 @@ def read_phasing(args):
                       snvs_only=args.snvs_only, multiallelics=args.multiallelics,
                       use_all_methylated_sites=args.use_all_methylated_sites, force=args.force,
                       max_allele_length=args.max_allele_length, min_allele_count=args.min_allele_count,
+                      min_allele_count_meth=args.min_allele_count_meth,
                       min_base_quality=args.min_base_quality, seqtech=seqtech, min_mapq=args.min_mapq,
                       flank_snv=flank_snv, flank_indel=flank_indel,
                       )
-    longhap.infer_variant_transitions()
-    longhap.infer_methylation_transitions()
-    longhap.phase()
+    if longhap.num_variants > 0:
+        longhap.infer_variant_transitions()
+        longhap.infer_methylation_transitions()
+        longhap.phase()
     longhap.write_results()
 
 
@@ -2103,6 +2106,9 @@ def main(argv=None):
     parser.add_argument('--min_allele_count',
                            help='How many examples of the minor allele must be present in the reads to consider the '
                                 'variant for phasing [1]', type=int, default=1)
+    parser.add_argument('--min_allele_count_meth',
+                           help='How many examples of the minor allele must be present in the reads to consider the '
+                                'variant for methylation phasing [2]', type=int, default=2)
     parser.add_argument('--min_base_quality',
                            help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. '
                                 'For HiFi data, all bases should be consider, that is a minimum quality of 0. '
