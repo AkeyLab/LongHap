@@ -1183,7 +1183,7 @@ rule evaluate_phasing_custom:
         "envs/longhap.yaml"
     shell:
         "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf}) "
-        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.annotations} "
+        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} {params.options}"
 
 rule evaluate_phasing_custom_longhap_meth:
@@ -1210,7 +1210,7 @@ rule evaluate_phasing_custom_longhap_meth:
         "envs/longhap.yaml"
     shell:
         "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf}) "
-        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.annotations} "
+        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
         "--baseline_vcf {input.baseline} {params.options}"
 
@@ -1238,7 +1238,7 @@ rule evaluate_phasing_custom_methphaser:
         "envs/longhap.yaml"
     shell:
         "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf}) "
-        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.annotations} "
+        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
         "--baseline_vcf {input.baseline} {params.options}"
 
