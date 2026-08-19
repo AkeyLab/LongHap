@@ -1818,9 +1818,6 @@ class LongHap:
         """
         start = 0
         haplotype_blocks = open(self.output_blocks, 'w')
-        while np.allclose(self.transition_matrix[:, :, start], 0.5):
-            start += 1
-        start = 0
         n = self.transition_matrix.shape[-1]
         while start < n and np.allclose(self.transition_matrix[:, :, start], 0.5):
             start += 1
