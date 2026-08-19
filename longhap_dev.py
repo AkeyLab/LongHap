@@ -66,17 +66,11 @@ class LongHap:
         # self.flank_indel = flank_indel
         self.seqtech = seqtech
 
-        if not self.output_transition_matrix.endswith('.npz') and self.output_transition_matrix is not None:
-            self.output_transition_matrix += '.npz'
-
-        if not self.output_transition_matrix_meth.endswith('.npz') and self.output_transition_matrix_meth is not None:
-            self.output_transition_matrix_meth += '.npz'
-
-        if not self.output_allele_coverage.endswith('.npz') and self.output_allele_coverage is not None:
-            self.output_allele_coverage += '.npz'
-
-        if not self.output_unphaseable_variants.endswith('.npz') and self.output_unphaseable_variants is not None:
-            self.output_unphaseable_variants += '.npz'
+        for attr in ('output_transition_matrix', 'output_transition_matrix_meth',
+                     'output_allele_coverage', 'output_unphaseable_variants'):
+            path = getattr(self, attr)
+            if path is not None and not path.endswith('.npz'):
+                setattr(self, attr, path + '.npz')
 
         self.methylation_read_assignments = defaultdict(list)
         self.prev_methylations = dict()
