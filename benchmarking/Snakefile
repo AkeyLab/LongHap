@@ -1175,7 +1175,7 @@ rule evaluate_phasing_custom:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech),
-        phasing_methods='whatshap|longhap|longphase|hapcut2|haplomaker'
+        phasing_method='whatshap|longhap|longphase|hapcut2|haplomaker'
     resources:
         mem_mb=2 * 1024,
         runtime=5
@@ -1202,7 +1202,7 @@ rule evaluate_phasing_custom_longhap_meth:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech),
-        phasing_methods='longhap_meth'
+        phasing_method='longhap_meth'
     resources:
         mem_mb=2 * 1024,
         runtime=5
@@ -1230,7 +1230,7 @@ rule evaluate_phasing_custom_methphaser:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech),
-        phasing_methods='whatshap_and_methphaser'
+        phasing_method='whatshap_and_methphaser'
     resources:
         mem_mb=2 * 1024,
         runtime=5
