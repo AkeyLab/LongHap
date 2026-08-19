@@ -828,7 +828,6 @@ class LongHap:
             mod[i] = np.sum(mod_condition_mask[start_idx:end_idx])
 
         df_hap = df_hap[cov > 0]
-        hap = hap[cov > 0]
         mod = mod[cov > 0]
         cov = cov[cov > 0]
         df_hap['hap'] = hap
