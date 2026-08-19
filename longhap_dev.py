@@ -658,19 +658,32 @@ class LongHap:
         :param i: int, number of subsequent transitions that were inferred
         :return: np.array, modified phase transition matrix
         """
+        a, b = hap[i], hap[i + 1]
+
+        if np.isnan(a) or np.isnan(b) or abs(a - 0.5) < 0.1 or abs(b - 0.5) < 0.1:
+            return np.full((2, 2), 0.5)
+
         transition_matrix = np.zeros((2, 2)) + 1e-20
-        if np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 1:
-            transition_matrix[1, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
-            transition_matrix[1, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
-        elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 0:
-            transition_matrix[0, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
-            transition_matrix[0, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
-        elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 1:
-            transition_matrix[0, 0] = np.max([1 - np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
-            transition_matrix[0, 1] = np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
-        elif np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 0:
-            transition_matrix[1, 1] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20]), 1e-20])
-            transition_matrix[1, 0] = np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20])
+
+        s_a, s_b = int(a > 0.5), int(b > 0.5)
+        c_a, c_b = max(a, 1 - a), max(b, 1 - b)
+        p = (c_a * c_b) / (c_a * c_b + (1 - c_a) * (1 - c_b) + 1e-100)
+
+        transition_matrix[s_a, s_b] = max(p, 1e-20)
+        transition_matrix[s_a, 1 - s_b] = max(1 - p, 1e-20)
+
+        # if np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 1:
+        #     transition_matrix[1, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
+        #     transition_matrix[1, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
+        # elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 0:
+        #     transition_matrix[0, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
+        #     transition_matrix[0, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
+        # elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 1:
+        #     transition_matrix[0, 0] = np.max([1 - np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
+        #     transition_matrix[0, 1] = np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
+        # elif np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 0:
+        #     transition_matrix[1, 1] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20]), 1e-20])
+        #     transition_matrix[1, 0] = np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20])
 
         transition_matrix = LongHap.mirror_transition(transition_matrix, normalized=True)
         return transition_matrix
