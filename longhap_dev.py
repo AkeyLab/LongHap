@@ -827,13 +827,10 @@ class LongHap:
             end_idx = c_meth_probs.indptr[i + 1]
             mod[i] = np.sum(mod_condition_mask[start_idx:end_idx])
 
-        df_hap = df_hap[cov > 0]
-        mod = mod[cov > 0]
-        cov = cov[cov > 0]
         df_hap['hap'] = hap
         df_hap['mod_count'] = mod
         df_hap['unmod_count'] = cov - mod
-        df_hap['ratio'] = (mod / cov) * 100
+        df_hap['ratio'] = np.where(cov > 0, (mod / cov) * 100, np.nan)
         df_hap['coverage'] = cov
         return df_hap
 
