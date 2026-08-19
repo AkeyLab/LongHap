@@ -1653,12 +1653,12 @@ class LongHap:
                     # if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
                     #     self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
                     prev_state = self.read_states[read_name].get(str(n - 1))
-                    if prev_state is not None and prev_state != -1 and n - 1 in query_idx_vars:
+                    if prev_state is not None and prev_state != -1 and str(n - 1) in query_idx_vars:
                         self.transition_matrix[prev_state, state, n - 1] += 1
 
                     if n + 1 not in idx_to_realign:
                         next_state = self.read_states[read_name].get(str(n + 1))
-                        if next_state is not None and next_state != -1 and n + 1 in query_idx_vars:
+                        if next_state is not None and next_state != -1 and str(n + 1) in query_idx_vars:
                             self.transition_matrix[state, next_state, n] += 1
         if self.seqtech == 'ont':
             depth = strands.sum(axis=1)  # (2, n_variants)
@@ -1715,6 +1715,7 @@ class LongHap:
         delta[:, 0] = np.log([0.5, 0.5])
         phi[:, 0] = [0, 1]
         transition_matrix = np.log(np.where(transition_matrix == 0, 1e-20, transition_matrix))
+        l = 1
         if delta.shape[1] > 1:
             for l in range(1, delta.shape[1]):
                 if (transition_matrix[0, 0, l - 1] == transition_matrix[0, 1, l - 1] and
@@ -1768,7 +1769,7 @@ class LongHap:
         v_idx = 0
         block_id = 0
         block_ends = deque(self.block_ends)
-        block_end = block_ends.popleft()
+        block_end = block_ends.popleft() if block_ends else -1
         for v in vcf(self.chrom):
 
             if (v.gt_types != 1 or not (v.is_snp or (v.is_indel and not self.snvs_only)) or
