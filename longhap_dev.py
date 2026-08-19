@@ -830,7 +830,9 @@ class LongHap:
         df_hap['hap'] = hap
         df_hap['mod_count'] = mod
         df_hap['unmod_count'] = cov - mod
-        df_hap['ratio'] = np.where(cov > 0, (mod / cov) * 100, np.nan)
+        ratio = np.full_like(mod, np.nan, dtype=float)
+        np.divide(mod, cov, out=ratio, where=(cov > 0))
+        df_hap['ratio'] = ratio * 100
         df_hap['coverage'] = cov
         return df_hap
 
