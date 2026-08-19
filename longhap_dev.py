@@ -1077,9 +1077,11 @@ class LongHap:
             reads_hap1 = np.concatenate([reads_hap1, np.array(unassigned)[p_hap1 - p_hap2 > 3]])
             reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[p_hap2 - p_hap1 > 3]])
             unassigned = np.array(unassigned)[~(p_hap1 - p_hap2 > 3) & ~(p_hap2 - p_hap1 > 3)]
-        self.methylation_read_assignments['hap1'].extend([(read_ids[i], (idx_var_a, hap1[0]), (idx_var_b, hap1[-1]))
+        v_a = self.phaseable[idx_var_a]
+        v_a1 = self.phaseable[idx_var_a + 1]
+        self.methylation_read_assignments['hap1'].extend([(read_ids[i], (v_a, hap1[0]), (v_a1, hap1[-1]))
                                                           for i in reads_hap1])
-        self.methylation_read_assignments['hap2'].extend([(read_ids[i], (idx_var_a, hap2[0]), (idx_var_b, hap2[-1]))
+        self.methylation_read_assignments['hap2'].extend([(read_ids[i], (v_a, hap2[0]), (v_a1, hap2[-1]))
                                                           for i in reads_hap2])
         # calculate most common variant states at sites flanking uncertain transition
         read_variant_states = np.where(read_variant_states == -1, np.nan, read_variant_states)
