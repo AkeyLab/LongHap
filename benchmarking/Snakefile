@@ -11,12 +11,13 @@ approx_sequenced_coverage = config['approx_sequenced_coverage']
 haplomaker_jar = config['haplomaker_jar']
 aligned_bam_to_cpg_scores_path = config['aligned_bam_to_cpg_scores_path']
 reference_genome_url = config['reference_genome_url']
+gene_annotations_url= config['gene_annotations_url']
 par_regions_bed_url = config['par_regions_bed_url']
 gt_variants_url = config['gt_variants_url']
 autosomes = [str(i) for i in range(1, 23)]
 # sex_chromosomes=['X', "Y"]
 sex_chromosomes = []
-phasing_methods = ['whatshap', 'whatshap_and_methphaser', 'longhap_meth', 'longhap_meth',
+phasing_methods = ['whatshap', 'whatshap_and_methphaser', 'longhap_meth',
                    "longhap", 'hapcut2', "longphase"]# 'haplomaker',
 
 seq_tech = ['hifi', 'ont_r10.4.1_dorado', 'ul_ont_r10.4.1_dorado']
@@ -45,10 +46,9 @@ rule all:
         expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.stats_complex_variants.tsv",
                chrom=autosomes, variant_type=['snps_indels'],
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
-        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap_and_methphaser_connected_intervals.bed",
-               chrom=autosomes, aligner=aligner, seq_tech=seq_tech),
-        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.longhap_meth_connected_intervals.bed",
-            chrom=autosomes,aligner=aligner,seq_tech=seq_tech),
+        expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
+               variant_type=['snps', 'snps_indels'], phasing_method=phasing_methods, chrom=autosomes,
+               aligner=aligner,seq_tech=seq_tech)
 
 
 rule download_reference_genome:
@@ -1139,22 +1139,106 @@ rule run_whatshap_compare_all_complex:
         "--switch-error-bed {output.bed} <(bcftools norm -r {params.chrom} -m -any {input.gt})"
         " <(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any | bcftools view -V snps)"
 
-rule get_phase_blocks_connected_longhap:
-    input:
-        nometh=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_phased.blocks.bed",
-        meth=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_meth_phased.blocks.bed"
+rule download_gene_annotations:
     output:
-        connected=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_meth_connected_intervals.bed"
+        ref_dir + gene_annotations_url.split('/')[-1]
+    params:
+        url=gene_annotations_url,
+        outdir=ref_dir
+    localrule: True
     shell:
-        "bedtools intersect -a {input.nometh} -b {input.meth} -f 1.0 -wao | "
-        "awk -v OFS='\\t' 'NR>1 && $1==pc && $5!=\".\" && $5==pms && $6==pme && $2>pe {{print pc,pe,$2}}{{pc=$1;pe=$3;pms=$5;pme=$6}}' > {output}"
+        "mkdir -p {params.outdir}; wget -qO {output} {params.url}"
 
-rule get_phase_blocks_connected_methphaser:
+rule get_exons:
     input:
-        nometh=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.blocks.bed",
-        meth=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.blocks.bed"
+        ref_dir + gene_annotations_url.split('/')[-1]
     output:
-        connected=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_connected_intervals.bed"
+        ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed')
+    localrule: True
     shell:
-        "bedtools intersect -a {input.nometh} -b {input.meth} -f 1.0 -wao | "
-        "awk -v OFS='\\t' '$1==pc && $4!=\".\" && $5==pms && $6==pme && $2>pe {{print pc,pe,$2}}{{pc=$1;pe=$3;pms=$5;pme=$6}}' > {output} "
+        "awk -F '\\t' -v OFS='\\t' '$3==\"exon\" {{name=\".\"; n=split($9, a, \";\"); "
+        "for (i=1; i<=n; i++) if (a[i] ~ /^gene_name=/) {{ name=substr(a[i], 11); break }} "
+        "print $1, $4-1, $5, name}}' {input} | sort -k1,1 -k2,2n > {output}"
+
+rule evaluate_phasing_custom:
+    input:
+        vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        gt=ref_dir + gt_variants_url.split('/')[-1],
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed')
+    output:
+        summary=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
+        genes=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.genes.tsv",
+        bed=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.all_sites.bed"
+    params:
+        chrom='chr{chrom}',
+        options=lambda wildcards: '--evaluate_sv' if wildcards.variant_type == 'snps_indels' else ''
+    wildcard_constraints:
+        aligner=aligner,
+        seq_tech="|".join(seq_tech),
+        phasing_methods='whatshap|longhap|longphase|hapcut2|haplomaker'
+    resources:
+        mem_mb=2 * 1024,
+        runtime=5
+    conda:
+        "envs/longhap.yaml"
+    shell:
+        "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf}) "
+        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.annotations} "
+        "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} {params.options}"
+
+rule evaluate_phasing_custom_longhap_meth:
+    input:
+        vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        gt=ref_dir + gt_variants_url.split('/')[-1],
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed'),
+        baseline=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_phased.vcf.gz"
+    output:
+        summary=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
+        genes=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.genes.tsv",
+        bed=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.all_sites.bed"
+    params:
+        chrom='chr{chrom}',
+        options=lambda wildcards: '--evaluate_sv' if wildcards.variant_type == 'snps_indels' else ''
+    wildcard_constraints:
+        aligner=aligner,
+        seq_tech="|".join(seq_tech),
+        phasing_methods='longhap_meth'
+    resources:
+        mem_mb=2 * 1024,
+        runtime=5
+    conda:
+        "envs/longhap.yaml"
+    shell:
+        "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf}) "
+        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.annotations} "
+        "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
+        "--baseline_vcf {input.baseline} {params.options}"
+
+rule evaluate_phasing_custom_methphaser:
+    input:
+        vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
+        gt=ref_dir + gt_variants_url.split('/')[-1],
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed'),
+        baseline=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz"
+    output:
+        summary=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
+        genes=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.genes.tsv",
+        bed=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.switch_errors.all_sites.bed"
+    params:
+        chrom='chr{chrom}',
+        options=lambda wildcards: '--evaluate_sv' if wildcards.variant_type == 'snps_indels' else ''
+    wildcard_constraints:
+        aligner=aligner,
+        seq_tech="|".join(seq_tech),
+        phasing_methods='whatshap_and_methphaser'
+    resources:
+        mem_mb=2 * 1024,
+        runtime=5
+    conda:
+        "envs/longhap.yaml"
+    shell:
+        "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf}) "
+        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.annotations} "
+        "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
+        "--baseline_vcf {input.baseline} {params.options}"
+
