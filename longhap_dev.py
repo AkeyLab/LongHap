@@ -326,7 +326,8 @@ class LongHap:
         offset = position - read_start
         while cigar:
             # do not count soft clips and insertions
-            if length + ref_offset > offset and operation != 4 and operation != 1:
+            if (length + ref_offset > offset
+                    and operation not in (1, 4, 5, 6)):
                 break
             # match
             if operation == 0 or operation == 7:
@@ -345,6 +346,10 @@ class LongHap:
             # soft clip, query does not appear in alignment
             elif operation == 4:
                 query_offset += length
+            elif operation == 3:  # N, reference skip
+                ref_offset += length
+            elif operation == 5 or operation == 6:  # H, P: consume neither
+                pass
             operation, length = cigar.popleft()
         # last operation is soft clip --> don't increment reference offset
         # TODO make sure that this works as intended
@@ -1070,6 +1075,8 @@ class LongHap:
         # calculate most common variant states at sites flanking uncertain transition
         read_variant_states = np.where(read_variant_states == -1, np.nan, read_variant_states)
         read_variant_cov = np.where(np.isnan(read_variant_states), np.nan, 1)
+        if reads_hap1.shape[0] == 0:
+            breakpoint()
         hap1 = np.nanmean(read_variant_states[reads_hap1], axis=0)
         hap2 = np.nanmean(read_variant_states[reads_hap2], axis=0)
         hap1_cov = np.nansum(read_variant_cov[reads_hap1], axis=0)
@@ -1645,8 +1652,18 @@ class LongHap:
 
                     self.allele_coverage[state, n] += 1
 
-                    if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
-                        self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
+                    # if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
+                    #     self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
+                    # the main scan carried prev_state = None past this variant, so
+                    # *both* pairs touching n were skipped there and both need repair.
+                    prv = self.read_states[read_name].get(str(n - 1))
+                    if prv is not None and prv != -1:
+                        self.transition_matrix[prv, state, n - 1] += 1
+                    # a downstream neighbour that also needs realignment is still None
+                    # here; it adds this same pair through its own upstream repair.
+                    nxt = self.read_states[read_name].get(str(n + 1))
+                    if nxt is not None and nxt != -1:
+                        self.transition_matrix[state, nxt, n] += 1
         if self.seqtech == 'ont':
             depth = strands.sum(axis=1)  # (2, n_variants)
             one_sided = (strands == 0).any(axis=(0, 1)) & (depth.min(axis=0) > 0)
@@ -1729,9 +1746,9 @@ class LongHap:
                 phi[1, l] = np.argmax(delta[:, l - 1] + transition_matrix[1, :, l - 1])
 
         # backtrace last block
-        hap = self.backtrace(delta, hap, phi, l, start_prev_block)
-        # hap = np.argmax(delta, axis=0)
-        self.block_ends.append(self.phaseable[l])
+        if start_prev_block < l:
+            hap = self.backtrace(delta, hap, phi, l, start_prev_block)
+            self.block_ends.append(self.phaseable[l])
         hap_0 = hap.copy()
         hap_1 = np.where(hap_0 == 0, 1, 0)
         hap_1 = np.where(hap_0 == -1, -1, hap_1)
@@ -1762,7 +1779,8 @@ class LongHap:
                     (len(v.ALT) > 1 and not self.multiallelics) or  # include multiallelics only if specified
                     v.genotypes[0][0] == -1 or
                     v.genotypes[0][1] == -1 or
-                    np.max([len(v.REF), max([len(a) for a in v.ALT])]) > self.max_allele_length):
+                    np.max([len(v.REF), max([len(a) for a in v.ALT])]) > self.max_allele_length or
+                    (has_allele_level_info and "_" in v.ID)):
                 gt = v.genotypes[0][:2]
                 gt.append(False)
                 v.genotypes = [gt]
