@@ -15,8 +15,9 @@ from scipy.sparse import csc_array
 import json
 import re
 from scipy.special import logsumexp
-import parasail
-import contextlib, io
+# import parasail
+# import contextlib
+import io
 logging.getLogger(__name__)
 
 
@@ -27,8 +28,8 @@ class LongHap:
                  output_variant_read_mapping=None, output_allele_coverage=None, output_transition_matrix_meth=None,
                  output_differentially_methylated_sites=None,
                  output_unphaseable_variants=None, snvs_only=False, multiallelics=False,
-                 use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh_haplotagging=3,
-                 sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_allele_count_meth=2,
+                 use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh=3,
+                 sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
                  min_base_quality=0, min_mapq=20,
                  # flank_snv=33, flank_indel=100,
                  seqtech='pacbio'):
@@ -42,7 +43,7 @@ class LongHap:
         self.use_all_methylated_sites = use_all_methylated_sites
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
-        self.llr_thresh_haplotagging = llr_thresh_haplotagging
+        self.llr_thresh = llr_thresh
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
@@ -65,11 +66,17 @@ class LongHap:
         # self.flank_indel = flank_indel
         self.seqtech = seqtech
 
-        for attr in ('output_transition_matrix', 'output_transition_matrix_meth',
-                     'output_allele_coverage', 'output_unphaseable_variants'):
-            p = getattr(self, attr)
-            if p is not None and not p.endswith('.npz'):
-                setattr(self, attr, p + '.npz')
+        if not self.output_transition_matrix.endswith('.npz') and self.output_transition_matrix is not None:
+            self.output_transition_matrix += '.npz'
+
+        if not self.output_transition_matrix_meth.endswith('.npz') and self.output_transition_matrix_meth is not None:
+            self.output_transition_matrix_meth += '.npz'
+
+        if not self.output_allele_coverage.endswith('.npz') and self.output_allele_coverage is not None:
+            self.output_allele_coverage += '.npz'
+
+        if not self.output_unphaseable_variants.endswith('.npz') and self.output_unphaseable_variants is not None:
+            self.output_unphaseable_variants += '.npz'
 
         self.methylation_read_assignments = defaultdict(list)
         self.prev_methylations = dict()
@@ -564,6 +571,7 @@ class LongHap:
         :param normalized: boolean, whether the transition_matrix has been normalized to values between 0 and 1
         :return: 2x2 np.array, mirrored, symmetric transition matrix
         """
+        t = np.array(t, dtype=float, copy=True)
         # # step from alternative allele is more certain than from reference allele
         if (np.abs(np.log(t[0, 0] / t[0, 1])) < np.abs(np.log(t[1, 0] / t[1, 1])) and
                 (t[1, :].max() > 1 or t[0, :].max() <= 1 or normalized) and np.unique(t.argmax(axis=1)).shape[0] > 1):
@@ -1024,18 +1032,18 @@ class LongHap:
 
             # methylated sites must have a  an LLR > 3
             meth_states_hap1 = np.zeros_like(meth_hap1) - 1
-            meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > 3, 1, meth_states_hap1)
+            meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > self.llr_thresh, 1, meth_states_hap1)
             # unmethylated sites must have  an LLR < -3
-            meth_states_hap1 = np.where(unmeth_hap1 - meth_hap1 > 3, 0, meth_states_hap1)
+            meth_states_hap1 = np.where(unmeth_hap1 - meth_hap1 > self.llr_thresh, 0, meth_states_hap1)
 
             meth_hap2 = methylation_probs[reads_hap2].sum(axis=0)
             unmeth_hap2 = unmethylated_probs[reads_hap2].sum(axis=0)
 
             # methylated sites must have an LLR > 3
             meth_states_hap2 = np.zeros_like(meth_hap2) - 1
-            meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, meth_states_hap2)
+            meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > self.llr_thresh, 1, meth_states_hap2)
             # unmethylated sites must have an LLR < -3
-            meth_states_hap2 = np.where(unmeth_hap2 - meth_hap2 > 3, 0, meth_states_hap2)
+            meth_states_hap2 = np.where(unmeth_hap2 - meth_hap2 > self.llr_thresh, 0, meth_states_hap2)
 
             # find differentially methylated sites
             diff_meth = np.where((meth_states_hap1 != meth_states_hap2) & # hap1 and hap2 must have different state
@@ -1067,9 +1075,10 @@ class LongHap:
                                                                                                 unassigned, diff_meth))
             prev_unassigned = unassigned.copy()
             # assign reads based A > B and A > 0.5
-            reads_hap1 = np.concatenate([reads_hap1, np.array(unassigned)[p_hap1 - p_hap2 > 3]])
-            reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[p_hap2 - p_hap1 > 3]])
-            unassigned = np.array(unassigned)[~(p_hap1 - p_hap2 > 3) & ~(p_hap2 - p_hap1 > 3)]
+            reads_hap1 = np.concatenate([reads_hap1, np.array(unassigned)[p_hap1 - p_hap2 > self.llr_thresh]])
+            reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[p_hap2 - p_hap1 > self.llr_thresh]])
+            unassigned = np.array(unassigned)[~(p_hap1 - p_hap2 > self.llr_thresh) &
+                                              ~(p_hap2 - p_hap1 > self.llr_thresh)]
         v_a = self.phaseable[idx_var_a]
         v_a1 = self.phaseable[idx_var_a + 1]
         self.methylation_read_assignments['hap1'].extend([(read_ids[i], (v_a, hap1[0]), (v_a1, hap1[-1]))
@@ -1774,7 +1783,7 @@ class LongHap:
         # initialize phased VCF
         vcf_phased = Writer(self.output_vcf, vcf, 'wz')
         v_idx = 0
-        block_id = 0
+        block_id = None
         block_ends = deque(self.block_ends)
         block_end = block_ends.popleft() if block_ends else -1
         for v in vcf(self.chrom):
@@ -1803,7 +1812,7 @@ class LongHap:
                         block_id = v.POS
                         block_end = block_ends.popleft()
                     # assign phase set
-                    if block_id == 0:
+                    if block_id is None:
                         block_id = v.POS
                     v.set_format("PS", np.array([block_id]))
                     gt = [self.idx_variant_mapping[v_idx]['gt'][i] for i in self.haplotypes[:, v_idx]]
@@ -1894,7 +1903,7 @@ class LongHap:
                     prob_1 = (prob_read(1) + prob_haplotype(1)).sum()
                     # calculate LLR  for coming from either haplotype
                     # log(P(R|H_A) / P(R|H_B)) = log(P(R|H_A)) - log(P(R|H_B))
-                    if prob_0 - prob_1 > self.llr_thresh_haplotagging:
+                    if prob_0 - prob_1 > self.llr_thresh:
                         reads_0.append(read_name)
                         read.set_tag("HP", 1)
                         if np.max(idx) > np.max(self.block_ends):
@@ -1903,7 +1912,7 @@ class LongHap:
                             block = np.where(self.block_ends >= np.max(idx))[0][0]
                         read_assignments.write(f'{read_name}\tH1\t{block}\n')
                         hp1 += 1
-                    elif prob_1 - prob_0 > self.llr_thresh_haplotagging:
+                    elif prob_1 - prob_0 > self.llr_thresh:
                         reads_1.append(read_name)
                         read.set_tag("HP", 2)
                         if np.max(idx) > np.max(self.block_ends):
@@ -2099,6 +2108,8 @@ def read_phasing(args):
                       max_allele_length=args.max_allele_length, min_allele_count=args.min_allele_count,
                       min_allele_count_meth=args.min_allele_count_meth,
                       min_base_quality=args.min_base_quality, seqtech=seqtech, min_mapq=args.min_mapq,
+                      sample=args.sample, llr_thresh=args.llr_thresh, error_rate=args.error_rate,
+                      max_meth_distance=args.max_meth_distance,
                       # flank_snv=flank_snv, flank_indel=flank_indel,
                       )
     if longhap.num_variants > 0:
@@ -2139,6 +2150,17 @@ def main(argv=None):
                              'For ONT data, a threshold of 10 is recommended [0]', type=int, default=0)
     parser.add_argument('--min_mapq', help='Minimum mapping quality to consider a read for phasing [20]',
                         type=int, default=20)
+    parser.add_argument('--sample', help='Sample to phase in a multi-sample VCF '
+                                         '[first sample]', default=None)
+    parser.add_argument('--llr_thresh',
+                        help='Log-likelihood ratio threshold for ' 'determining methylation states,'
+                             ' and read haplotagging [3]',
+                        type=float, default=3)
+    parser.add_argument('--error_rate', help='Per-base error rate assumed when '
+                                             'haplotagging reads [1e-3]', type=float, default=1e-3)
+    parser.add_argument('--max_meth_distance', help='Search window around an uncertain '
+                                                    'transition for methylation calls [5000]',
+                        type=int, default=5000)
     # parser.add_argument('--flank_snv', help='Number of flanking bp to use for realignment around '
     #                                         'uncertain SNVs. Default is 66 for ONT and 33 for PacBio', type=int,
     #                     default=None)
