@@ -700,15 +700,19 @@ class LongHap:
         :param idx: int, index of target transition that was inferred from methylation dats
         :return: np.array, modified phase transition matrix
         """
-        if (hap1_cov[i] < self.min_allele_count or hap1_cov[i + 1] < self.min_allele_count or
-                hap2_cov[i] < self.min_allele_count or hap2_cov[i + 1] < self.min_allele_count):
+        min_cov = max(self.min_allele_count, 2)
+        if (hap1_cov[i] < min_cov or hap1_cov[i + 1] < min_cov or
+                hap2_cov[i] < min_cov or hap2_cov[i + 1] < min_cov):
             pass
         else:
             t1 = self.calculate_transition_probability_from_methylation_helper(hap1, i)
             t2 = self.calculate_transition_probability_from_methylation_helper(hap2, i)
             cov_hap1 = (hap1_cov[i] + hap1_cov[i + 1]) / 2
             cov_hap2 = (hap2_cov[i] + hap2_cov[i + 1]) / 2
-            self.transition_matrix[:, :, idx] = (t1 * cov_hap1 + t2 * cov_hap2) / (cov_hap1 + cov_hap2 + 1e-100)
+            if np.all(t1 == 0.5) and np.all(t2 == 0.5):
+                pass
+            else:
+                self.transition_matrix[:, :, idx] = (t1 * cov_hap1 + t2 * cov_hap2) / (cov_hap1 + cov_hap2 + 1e-100)
 
     @staticmethod
     def get_read_methylation(methylations, positions, cigar, read_start, read_end, ref_offset, query_offset, operation,
