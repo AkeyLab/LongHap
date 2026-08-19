@@ -1001,45 +1001,37 @@ class LongHap:
         prev_unassigned = []
 
         while len(unassigned) > 0 and not np.array_equal(unassigned, prev_unassigned):
-            # meth_hap1 = methylation_probs[reads_hap1].sum(axis=0)
-            # unmeth_hap1 = unmethylated_probs[reads_hap1].sum(axis=0)
-            # # methylated sites must have a probability greater than 0.5 and an LLR > 3
+            meth_hap1 = methylation_probs[reads_hap1].sum(axis=0)
+            unmeth_hap1 = unmethylated_probs[reads_hap1].sum(axis=0)
+            # methylated sites must have a probability greater than 0.5 and an LLR > 3
             # meth_states_hap1 = np.zeros_like(meth_hap1) - 1
             # meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > 3, 1, meth_states_hap1)
             # # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
             # meth_states_hap1 = np.where(unmeth_hap1 - meth_hap1 > 3, 0, meth_states_hap1)
-            #
-            # meth_hap2 = methylation_probs[reads_hap2].sum(axis=0)
-            # unmeth_hap2 = unmethylated_probs[reads_hap2].sum(axis=0)
-            #
+            cov_hap1 = (np.asarray((methylation_probs[reads_hap1] != 0).sum(axis=0)).ravel() +
+                        np.asarray((unmethylated_probs[reads_hap1] != 0).sum(axis=0)).ravel())
+            meth_states_hap1 = np.where(cov_hap1 > 0, 0, -1)
+            meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > 3, 1, meth_states_hap1)
+
+            meth_hap2 = methylation_probs[reads_hap2].sum(axis=0)
+            unmeth_hap2 = unmethylated_probs[reads_hap2].sum(axis=0)
+
             # # methylated sites must have a probability greater than 0.5 and an LLR > 3
             # meth_states_hap2 = np.zeros_like(meth_hap2) - 1
             # meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, meth_states_hap2)
             # # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
             # meth_states_hap2 = np.where(unmeth_hap2 - meth_hap2 > 3, 0, meth_states_hap2)
-            # # find differentially methylated sites
-            # diff_meth = np.where((meth_states_hap1 != meth_states_hap2) & # hap1 and hap2 must have different state
-            #                      (meth_states_hap1 >= 0) &  # hap1 must be defined
-            #                      (meth_states_hap2 >= 0))[0]  # hap1 must be defined
-            meth_hap1 = methylation_probs[reads_hap1].sum(axis=0)
-            unmeth_hap1 = unmethylated_probs[reads_hap1].sum(axis=0)
-            # methylated sites must have a probability greater than 0.5 and an LLR > 3
-            meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > 3, 1, 0)
-            # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
-            # meth_states_hap1 = np.where((unmeth_hap1 > np.log10(0.5)) & (unmeth_hap1 - meth_hap1 > 3), 0, meth_states_hap1)
 
-            meth_hap2 = methylation_probs[reads_hap2].sum(axis=0)
-            unmeth_hap2 = unmethylated_probs[reads_hap2].sum(axis=0)
-
-            # methylated sites must have a probability greater than 0.5 and an LLR > 3
-            meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, 0)
-            # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
-            # meth_states_hap2 = np.where((unmeth_hap2 > np.log10(0.5)) & (unmeth_hap2 - meth_hap2 > 3), 0, meth_states_hap2)
+            cov_hap2 = (np.asarray((methylation_probs[reads_hap2] != 0).sum(axis=0)).ravel() +
+                        np.asarray((unmethylated_probs[reads_hap2] != 0).sum(axis=0)).ravel())
+            meth_states_hap2 = np.where(cov_hap2 > 0, 0, -1)
+            meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, meth_states_hap2)
 
             # find differentially methylated sites
             diff_meth = np.where((meth_states_hap1 != meth_states_hap2) & # hap1 and hap2 must have different state
                                  (meth_states_hap1 >= 0) &  # hap1 must be defined
                                  (meth_states_hap2 >= 0))[0]  # hap1 must be defined
+
 
 
             methylation_per_read_hap1 = self.get_diff_methylation_sites_per_hap(c_methylation_calls, methylation_probs,
