@@ -1015,7 +1015,6 @@ class LongHap:
             meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, meth_states_hap2)
             # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
             meth_states_hap2 = np.where(unmeth_hap2 - meth_hap2 > 3, 0, meth_states_hap2)
-            breakpoint()
             # find differentially methylated sites
             diff_meth = np.where((meth_states_hap1 != meth_states_hap2) & # hap1 and hap2 must have different state
                                  (meth_states_hap1 >= 0) &  # hap1 must be defined
