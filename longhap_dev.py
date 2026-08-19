@@ -1652,13 +1652,11 @@ class LongHap:
 
                     self.allele_coverage[state, n] += 1
 
-                    if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
-                        self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
-                    # # the main scan carried prev_state = None past this variant, so
-                    # # *both* pairs touching n were skipped there and both need repair.
-                    # prv = self.read_states[read_name].get(str(n - 1))
-                    # if prv is not None and prv != -1:
-                    #     self.transition_matrix[prv, state, n - 1] += 1
+                    # if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
+                    #     self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
+                    prev_state = self.read_states[read_name].get(str(n - 1))
+                    if prev_state is not None and prev_state != -1:
+                        self.transition_matrix[prev_state, state, n - 1] += 1
                     # # a downstream neighbour that also needs realignment is still None
                     # # here; it adds this same pair through its own upstream repair.
                     # nxt = self.read_states[read_name].get(str(n + 1))
