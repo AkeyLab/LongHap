@@ -1637,7 +1637,10 @@ class LongHap:
                 prev_state = state
 
             # # realign uncertain variants
-            # idx_to_realign = [int(n) for n, s in self.read_states[read_name].items() if s is None]
+            idx_to_realign = [int(n) for n, s in self.read_states[read_name].items() if s is None]
+            for n in idx_to_realign:
+                self.read_states[read_name][str(n)] = -1
+
             # for n in sorted(idx_to_realign):
             #     state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
             #                                         query_idx_vars[str(n)], gap_open, gap_extend, variant_homopolymer_mapping[n])
