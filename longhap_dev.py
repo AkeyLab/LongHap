@@ -947,6 +947,7 @@ class LongHap:
                         #                                     qpos, gap_open, gap_extend,
                         #                                     variant_homopolymer_mapping[n])
                         # self.read_states[read_name][str(n)] = state
+                        state = -1
                         self.read_states[read_name][str(n)] = -1
 
                     read_idx_states[i] = state
