@@ -1636,19 +1636,19 @@ class LongHap:
                 query_idx_vars[str(i)] = q_idx
                 prev_state = state
 
-            # realign uncertain variants
-            idx_to_realign = [int(n) for n, s in self.read_states[read_name].items() if s is None]
-            for n in sorted(idx_to_realign):
-                state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
-                                                    query_idx_vars[str(n)], gap_open, gap_extend, variant_homopolymer_mapping[n])
-                self.read_states[read_name][str(n)] = state
-                if state != -1:
-                    if self.seqtech == 'ont' and read.is_forward:
-                        strands[state, 0, n] += 1
-                    elif self.seqtech == 'ont' and not read.is_forward:
-                        strands[state, 1, n] += 1
-
-                    self.allele_coverage[state, n] += 1
+            # # realign uncertain variants
+            # idx_to_realign = [int(n) for n, s in self.read_states[read_name].items() if s is None]
+            # for n in sorted(idx_to_realign):
+            #     state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
+            #                                         query_idx_vars[str(n)], gap_open, gap_extend, variant_homopolymer_mapping[n])
+            #     self.read_states[read_name][str(n)] = state
+            #     if state != -1:
+            #         if self.seqtech == 'ont' and read.is_forward:
+            #             strands[state, 0, n] += 1
+            #         elif self.seqtech == 'ont' and not read.is_forward:
+            #             strands[state, 1, n] += 1
+            #
+            #         self.allele_coverage[state, n] += 1
 
                     # if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
                     #     self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
