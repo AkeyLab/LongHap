@@ -1722,7 +1722,7 @@ class LongHap:
         delta[:, 0] = np.log([0.5, 0.5])
         phi[:, 0] = [0, 1]
         transition_matrix = np.log(np.where(transition_matrix == 0, 1e-20, transition_matrix))
-        l = 1
+        l = 0
         if delta.shape[1] > 1:
             for l in range(1, delta.shape[1]):
                 if (transition_matrix[0, 0, l - 1] == transition_matrix[0, 1, l - 1] and
