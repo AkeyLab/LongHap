@@ -891,7 +891,7 @@ class LongHap:
         variant_homopolymer_mapping = {}
         for read in self.alignments.fetch(self.chrom, start, end + 1):
             # only consider primary alignments
-            if (read.is_secondary or read.is_duplicate or read.is_unmapped or
+            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_supplementary or
                     read.is_qcfail or read.mapping_quality < self.min_mapq or not read.has_tag("MM")):
                 continue
             read_name = read.query_name
@@ -1580,7 +1580,7 @@ class LongHap:
             strands = np.zeros((2, 2, self.num_variants))
         variant_homopolymer_mapping = {}
         for read in tqdm(self.alignments.fetch(self.chrom)):
-            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or
+            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or read.is_supplementary or
                     read.mapping_quality < self.min_mapq):
                 continue
             prev_state = -1
