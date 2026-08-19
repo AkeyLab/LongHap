@@ -35,7 +35,7 @@ class LongHap:
                  output_variant_read_mapping=None, output_allele_coverage=None, output_transition_matrix_meth=None,
                  output_differentially_methylated_sites=None,
                  output_unphaseable_variants=None, snvs_only=False, multiallelics=False,
-                 use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh=4,
+                 use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh_haplotagging=3,
                  sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_base_quality=0, min_mapq=20,
                  flank_snv=33, flank_indel=100, seqtech='pacbio'):
         self.chrom = chrom
@@ -49,7 +49,7 @@ class LongHap:
         self.use_all_methylated_sites = use_all_methylated_sites
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
-        self.llr_thresh = llr_thresh
+        self.llr_thresh_haplotagging = llr_thresh_haplotagging
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
@@ -1040,16 +1040,11 @@ class LongHap:
                                                                                                 methylation_probs.copy(),
                                                                                                 unmethylated_probs.copy(),
                                                                                                 unassigned, diff_meth))
-            breakpoint()
-
             prev_unassigned = unassigned.copy()
             # assign reads based A > B and A > 0.5
-            reads_hap1 = np.concatenate([reads_hap1, np.array(unassigned)[(p_hap1 > p_hap2) &
-                                                                          (p_hap1 > np.log10(0.5))]])
-            reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[(p_hap2 > p_hap1) &
-                                                                          (p_hap2 > np.log10(0.5))]])
-            unassigned = np.array(unassigned)[~((p_hap1 > p_hap2) & (p_hap1 > np.log10(0.5))) &
-                                              ~((p_hap2 > p_hap1) & (p_hap2 > np.log10(0.5)))]
+            reads_hap1 = np.concatenate([reads_hap1, np.array(unassigned)[p_hap1 - p_hap2 > 3]])
+            reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[p_hap2 - p_hap1 > 3]])
+            unassigned = np.array(unassigned)[~(p_hap1 - p_hap2 > 3) & ~(p_hap2 - p_hap1 > 3)]
         self.methylation_read_assignments['hap1'].extend([(read_ids[i], (idx_var_a, hap1[0]), (idx_var_b, hap1[-1]))
                                                           for i in reads_hap1])
         self.methylation_read_assignments['hap2'].extend([(read_ids[i], (idx_var_a, hap2[0]), (idx_var_b, hap2[-1]))
@@ -1848,7 +1843,7 @@ class LongHap:
                     prob_1 = (prob_read(1) + prob_haplotype(1)).sum()
                     # calculate LLR  for coming from either haplotype
                     # log(P(R|H_A) / P(R|H_B)) = log(P(R|H_A)) - log(P(R|H_B))
-                    if prob_0 - prob_1 >= self.llr_thresh:
+                    if prob_0 - prob_1 > self.llr_thresh_haplotagging:
                         reads_0.append(read_name)
                         read.set_tag("HP", 1)
                         if np.max(idx) > np.max(self.block_ends):
@@ -1857,7 +1852,7 @@ class LongHap:
                             block = np.where(self.block_ends >= np.max(idx))[0][0]
                         read_assignments.write(f'{read_name}\tH1\t{block}\n')
                         hp1 += 1
-                    elif prob_1 - prob_0 >= self.llr_thresh:
+                    elif prob_1 - prob_0 > self.llr_thresh_haplotagging:
                         reads_1.append(read_name)
                         read.set_tag("HP", 2)
                         if np.max(idx) > np.max(self.block_ends):
