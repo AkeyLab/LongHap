@@ -1075,8 +1075,6 @@ class LongHap:
         # calculate most common variant states at sites flanking uncertain transition
         read_variant_states = np.where(read_variant_states == -1, np.nan, read_variant_states)
         read_variant_cov = np.where(np.isnan(read_variant_states), np.nan, 1)
-        if reads_hap1.shape[0] == 0:
-            breakpoint()
         hap1 = np.nanmean(read_variant_states[reads_hap1], axis=0)
         hap2 = np.nanmean(read_variant_states[reads_hap2], axis=0)
         hap1_cov = np.nansum(read_variant_cov[reads_hap1], axis=0)
@@ -1657,11 +1655,11 @@ class LongHap:
                     prev_state = self.read_states[read_name].get(str(n - 1))
                     if prev_state is not None and prev_state != -1:
                         self.transition_matrix[prev_state, state, n - 1] += 1
-                    # # a downstream neighbour that also needs realignment is still None
-                    # # here; it adds this same pair through its own upstream repair.
-                    # nxt = self.read_states[read_name].get(str(n + 1))
-                    # if nxt is not None and nxt != -1:
-                    #     self.transition_matrix[state, nxt, n] += 1
+
+                    if n + 1 is not in idx_to_realign:
+                        next_state = self.read_states[read_name].get(str(n + 1))
+                        if next_state is not None and next_state != -1:
+                            self.transition_matrix[state, next_state, n] += 1
         if self.seqtech == 'ont':
             depth = strands.sum(axis=1)  # (2, n_variants)
             one_sided = (strands == 0).any(axis=(0, 1)) & (depth.min(axis=0) > 0)
