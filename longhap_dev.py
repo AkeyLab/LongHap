@@ -1656,7 +1656,7 @@ class LongHap:
                     if prev_state is not None and prev_state != -1:
                         self.transition_matrix[prev_state, state, n - 1] += 1
 
-                    if n + 1 is not in idx_to_realign:
+                    if n + 1 not in idx_to_realign:
                         next_state = self.read_states[read_name].get(str(n + 1))
                         if next_state is not None and next_state != -1:
                             self.transition_matrix[state, next_state, n] += 1
