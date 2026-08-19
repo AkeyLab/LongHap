@@ -38,7 +38,6 @@ class LongHap:
         self.bam = bam
         self.reference_path = reference_path
         self.methylation_calls_f = methylation_calls_f
-        self.prev_methylations = dict()
         self.use_all_methylated_sites = use_all_methylated_sites
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
@@ -46,11 +45,10 @@ class LongHap:
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
-        for attr in ('output_transition_matrix', 'output_transition_matrix_meth',
-                     'output_allele_coverage', 'output_unphaseable_variants'):
-            p = getattr(self, attr)
-            if p is not None and not p.endswith('.npz'):
-                setattr(self, attr, p + '.npz')
+        self.output_transition_matrix = output_transition_matrix
+        self.output_transition_matrix_meth = output_transition_matrix_meth
+        self.output_allele_coverage = output_allele_coverage
+        self.output_unphaseable_variants = output_unphaseable_variants
         self.output_read_assignments = output_read_assignments
         self.output_read_states = output_read_states
         self.output_variant_read_mapping = output_variant_read_mapping
@@ -66,7 +64,14 @@ class LongHap:
         self.flank_indel = flank_indel
         self.seqtech = seqtech
 
+        for attr in ('output_transition_matrix', 'output_transition_matrix_meth',
+                     'output_allele_coverage', 'output_unphaseable_variants'):
+            p = getattr(self, attr)
+            if p is not None and not p.endswith('.npz'):
+                setattr(self, attr, p + '.npz')
+
         self.methylation_read_assignments = defaultdict(list)
+        self.prev_methylations = dict()
 
         if self.chrom is None:
             variant_calls = VCF(self.vcf_f)
