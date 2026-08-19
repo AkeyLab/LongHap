@@ -943,10 +943,12 @@ class LongHap:
                                                                      read_start, r_idx, q_idx, operation, length,
                                                                      self.idx_variant_mapping[n])
                     if state is None:
-                        state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
-                                                            qpos, gap_open, gap_extend,
-                                                            variant_homopolymer_mapping[n])
-                        self.read_states[read_name][str(n)] = state
+                        # state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
+                        #                                     qpos, gap_open, gap_extend,
+                        #                                     variant_homopolymer_mapping[n])
+                        # self.read_states[read_name][str(n)] = state
+                        self.read_states[read_name][str(n)] = -1
+
                     read_idx_states[i] = state
                 else:
                     read_idx_states[i] = self.read_states[read_name][str(n)]
