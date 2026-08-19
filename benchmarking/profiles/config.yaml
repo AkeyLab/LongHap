@@ -35,6 +35,9 @@ groups:
  - run_whatshap_compare_shared_sites=EVAL
  - run_whatshap_compare_shared_sites_complex=EVAL
  - run_whatshap_stats_complex=EVAL
+ - evaluate_phasing_custom_longhap_meth=EVAL
+ - evaluate_phasing_custom_methphaser=EVAL
+ - evaluate_phasing_custom=EVAL
 
 group-components:
  - PREP=5
