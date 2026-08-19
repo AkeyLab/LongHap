@@ -700,7 +700,7 @@ class LongHap:
         :param idx: int, index of target transition that was inferred from methylation dats
         :return: np.array, modified phase transition matrix
         """
-        min_cov = max(self.min_allele_count, 2)
+        min_cov = max(self.min_allele_count, 1)
         if (hap1_cov[i] < min_cov or hap1_cov[i + 1] < min_cov or
                 hap2_cov[i] < min_cov or hap2_cov[i + 1] < min_cov):
             pass
@@ -1027,11 +1027,6 @@ class LongHap:
             # unmethylated sites must have  an LLR < -3
             meth_states_hap1 = np.where(unmeth_hap1 - meth_hap1 > 3, 0, meth_states_hap1)
 
-            # cov_hap1 = (np.asarray((methylation_probs[reads_hap1] != 0).sum(axis=0)).ravel() +
-            #             np.asarray((unmethylated_probs[reads_hap1] != 0).sum(axis=0)).ravel())
-            # meth_states_hap1 = np.where(cov_hap1 > 0, 0, -1)
-            # meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > 3, 1, meth_states_hap1)
-
             meth_hap2 = methylation_probs[reads_hap2].sum(axis=0)
             unmeth_hap2 = unmethylated_probs[reads_hap2].sum(axis=0)
 
@@ -1040,11 +1035,6 @@ class LongHap:
             meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, meth_states_hap2)
             # unmethylated sites must have an LLR < -3
             meth_states_hap2 = np.where(unmeth_hap2 - meth_hap2 > 3, 0, meth_states_hap2)
-
-            # cov_hap2 = (np.asarray((methylation_probs[reads_hap2] != 0).sum(axis=0)).ravel() +
-            #             np.asarray((unmethylated_probs[reads_hap2] != 0).sum(axis=0)).ravel())
-            # meth_states_hap2 = np.where(cov_hap2 > 0, 0, -1)
-            # meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > 3, 1, meth_states_hap2)
 
             # find differentially methylated sites
             diff_meth = np.where((meth_states_hap1 != meth_states_hap2) & # hap1 and hap2 must have different state
