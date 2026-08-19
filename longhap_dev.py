@@ -168,34 +168,34 @@ class LongHap:
         Infer transition matrix from methylation calls
         """
         # check if necessary information for methylation phasing are given and if intermediate files can be re-used
-        if (self.methylation_calls_f is not None and
-            (self.output_transition_matrix_meth is None or not os.path.isfile(self.output_transition_matrix_meth) or
-                self.force)):
-            logging.info(f'Loading methylation calls from {self.methylation_calls_f}')
-            if not os.path.isfile(self.methylation_calls_f):
-                logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
-                sys.exit(1)
-            self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
-                                                 names=['chrom', 'start', 'end', 'score', 'hap',
-                                                        'coverage', 'mod_count', 'unmod_count',
-                                                        'ratio'], engine='pyarrow', skiprows=7)
-            # get putative differentially methylated sites
-            self.methylation_calls = self.methylation_calls[(self.methylation_calls.chrom == self.chrom) &
-                                                            (self.methylation_calls.coverage >= 10) &
-                                                            (self.methylation_calls.ratio > 20) &
-                                                            (self.methylation_calls.ratio < 80)]
-            logging.info('Complementing variant transition matrix with methylation data')
-            # fill in transition matrix
-            self.get_methylation_transitions_helper()
-            if len(self.differentially_methylated_sites) > 0:
-                self.differentially_methylated_sites = pd.concat(
-                    self.differentially_methylated_sites).sort_values(['chrom', 'start', 'hap']).drop_duplicates()
-            else:
-                self.differentially_methylated_sites = pd.DataFrame()
-        elif self.methylation_calls_f is not None and os.path.isfile(self.output_transition_matrix_meth):
-            logging.info(
-                f'Loading methylation complemented transition matrix from {self.output_transition_matrix_meth}')
-            self.transition_matrix = np.load(self.output_transition_matrix_meth)['arr_0']
+        # if (self.methylation_calls_f is not None and
+        #     (self.output_transition_matrix_meth is None or not os.path.isfile(self.output_transition_matrix_meth) or
+        #         self.force)):
+        logging.info(f'Loading methylation calls from {self.methylation_calls_f}')
+        if not os.path.isfile(self.methylation_calls_f):
+            logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
+            sys.exit(1)
+        self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
+                                             names=['chrom', 'start', 'end', 'score', 'hap',
+                                                    'coverage', 'mod_count', 'unmod_count',
+                                                    'ratio'], engine='pyarrow', skiprows=7)
+        # get putative differentially methylated sites
+        self.methylation_calls = self.methylation_calls[(self.methylation_calls.chrom == self.chrom) &
+                                                        (self.methylation_calls.coverage >= 10) &
+                                                        (self.methylation_calls.ratio > 20) &
+                                                        (self.methylation_calls.ratio < 80)]
+        logging.info('Complementing variant transition matrix with methylation data')
+        # fill in transition matrix
+        self.get_methylation_transitions_helper()
+        if len(self.differentially_methylated_sites) > 0:
+            self.differentially_methylated_sites = pd.concat(
+                self.differentially_methylated_sites).sort_values(['chrom', 'start', 'hap']).drop_duplicates()
+        else:
+            self.differentially_methylated_sites = pd.DataFrame()
+        # elif self.methylation_calls_f is not None and os.path.isfile(self.output_transition_matrix_meth):
+        #     logging.info(
+        #         f'Loading methylation complemented transition matrix from {self.output_transition_matrix_meth}')
+        #     self.transition_matrix = np.load(self.output_transition_matrix_meth)['arr_0']
 
     def phase(self):
         """
