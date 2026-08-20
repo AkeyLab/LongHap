@@ -1141,19 +1141,19 @@ rule run_whatshap_compare_all_complex:
 
 rule download_gene_annotations:
     output:
-        ref_dir + gene_annotations_url.split('/')[-1]
+        ref_dir + gene_annotations_url.split('/')[-1].replace('.gz', '')
     params:
         url=gene_annotations_url,
         outdir=ref_dir
     localrule: True
     shell:
-        "mkdir -p {params.outdir}; wget -qO {output} {params.url}"
+        "mkdir -p {params.outdir}; wget -qO - {params.url} | gunzip > {output}"
 
 rule get_exons:
     input:
         ref_dir + gene_annotations_url.split('/')[-1]
     output:
-        ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed')
+        ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', '')
     localrule: True
     shell:
         "awk -F '\\t' -v OFS='\\t' '$3==\"exon\" {{name=\".\"; n=split($9, a, \";\"); "
@@ -1164,7 +1164,7 @@ rule evaluate_phasing_custom:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed')
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', '')
     output:
         summary=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
         genes=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.genes.tsv",
@@ -1190,7 +1190,7 @@ rule evaluate_phasing_custom_longhap_meth:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed'),
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', ''),
         baseline=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_phased.vcf.gz"
     output:
         summary=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
@@ -1218,7 +1218,7 @@ rule evaluate_phasing_custom_methphaser:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed'),
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', ''),
         baseline=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz"
     output:
         summary=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
@@ -1247,7 +1247,7 @@ rule evaluate_phasing_custom_shared_sites:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed'),
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', ''),
         shared_sites=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
     output:
         summary=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.all_sites.custom.tab",
@@ -1274,7 +1274,7 @@ rule evaluate_phasing_custom_longhap_meth_shared:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed'),
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', ''),
         baseline=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.longhap_phased.vcf.gz",
         shared_sites=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
     output:
@@ -1304,7 +1304,7 @@ rule evaluate_phasing_custom_methphaser_shared:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
-        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed'),
+        exons = ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', ''),
         baseline=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
         shared_sites=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.shared_phased_sites.bed"
     output:
