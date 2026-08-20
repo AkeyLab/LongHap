@@ -3,7 +3,9 @@
 
 The variant counting and switch-error statistics are defined to reproduce
 ``whatshap compare`` exactly (see the notes on each option below), so results
-from this script can be checked against it directly.
+from this script can be checked against it directly.  The statistics beyond it --
+the block junctions, the new connections, the SV and gene tests, and the windowed
+Hamming distance -- have no counterpart there.
 """
 import argparse
 import gzip
@@ -18,6 +20,13 @@ import numpy as np
 
 # whatshap refuses to model sites with this many alleles or more (whatshap.core)
 MAX_GENOTYPE_ALLELES = 16
+
+# The fixed-size windows the Hamming distance is additionally scored in, as
+# (column prefix, unit, report heading).  See evaluate_windowed_hamming().
+WINDOW_SECTIONS = (
+    ('winbp', 'bp', 'HAMMING IN FIXED bp WINDOWS'),
+    ('winvar', 'variants', 'HAMMING IN FIXED VARIANT WINDOWS'),
+)
 
 COUNT_WIDTH = 9
 LABEL_WIDTH = 40
@@ -319,6 +328,22 @@ def scorable_chains(overlapping_sites, target, gt):
     return chains
 
 
+def target_block_sizes(chains, target):
+    """Scorable variants per target phase block, over the chains of one scan.
+
+    A block holding a single one of them can carry no junction of its own, and a
+    call set that strands such variants -- methphaser leaves the first variant of
+    every block it merges behind, still carrying its old PS -- fragments the chain
+    the scans walk.  Both scans count them, so that fragmentation shows up in the
+    report instead of silently moving pairs between the statistics.
+    """
+    sizes: Counter = Counter()
+    for chain in chains.values():
+        for i, _ in chain:
+            sizes[(target.chromosome[i], int(target.phase_block[i]))] += 1
+    return sizes
+
+
 @dataclass
 class JunctionResult:
     junctions: int = 0
@@ -332,6 +357,11 @@ class JunctionResult:
     target_blocks: int = 0              # target blocks those baseline blocks form
     singleton_baseline_blocks: int = 0  # of those, holding one scorable variant
     structural_joins: int = 0           # sum over target blocks of (baseline blocks - 1)
+    singleton_target_blocks: int = 0    # target blocks holding one scorable variant
+    interleaved_blocks: int = 0         # target blocks whose baseline blocks alternate
+    # only filled in without a baseline call set
+    at_singleton: int = 0               # junctions touching a singleton target block
+    errors_at_singleton: int = 0        # of those, the ones that are errors
 
     @property
     def error_rate(self):
@@ -424,6 +454,71 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
     return result
 
 
+@dataclass
+class WindowResult:
+    """Hamming distance scored in windows of one fixed size."""
+    window: int = 0
+    unit: str = 'bp'
+    windows: int = 0
+    covered_variants: int = 0
+    hamming: int = 0
+
+    @property
+    def hamming_rate(self):
+        return self.hamming / self.covered_variants if self.covered_variants else float('nan')
+
+
+def evaluate_windowed_hamming(overlapping_sites, target, gt, window, unit='bp'):
+    """Hamming distance restricted to windows of one fixed size.
+
+    The block-wise Hamming distance of :func:`evaluate_phasing` grows with block
+    length: a single switch in the middle of an N-variant block leaves ~N/4
+    variants on the wrong haplotype, so a call set that builds longer blocks
+    scores worse than one that builds shorter blocks at the same switch density.
+    That makes ``within_hamming_rate`` incomparable between tools whose phase
+    blocks differ in length.  Scoring every call set in windows of one size
+    removes the confounding, and what is left is the local error density.
+
+    ``unit='bp'`` groups on the absolute coordinate (``position // window``), so
+    every call set is scored on the same genomic windows and the tiling does not
+    depend on where a call set happens to start a block.  ``unit='variants'``
+    cuts each block into runs of ``window`` consecutive comparable variants,
+    which fixes the denominator instead of the span.
+
+    Windows never cross an intersection block: relative orientation is undefined
+    between two blocks, so a window overlapping a block boundary is scored as one
+    group per block.  Groups holding fewer than two variants are skipped, as
+    single-variant blocks are in :func:`evaluate_phasing`.
+
+    The window has to be chosen well below the *smallest* block N50 being
+    compared; once it exceeds the blocks it is clipped by them and the statistic
+    decays back into the block-wise one it was meant to replace.
+    """
+    if unit not in ('bp', 'variants'):
+        raise ValueError(f"unit must be 'bp' or 'variants', not {unit!r}")
+    blocks, _, _ = group_blocks(overlapping_sites, target, gt)
+
+    result = WindowResult(window=window, unit=unit)
+    for block in blocks.values():
+        if len(block) < 2:
+            continue
+        agree = agreement(block, target, gt)
+        if unit == 'bp':
+            groups = defaultdict(list)
+            for k, (i, _) in enumerate(block):
+                groups[int(target.position[i]) // window].append(agree[k])
+            chunks = groups.values()
+        else:
+            chunks = (agree[k:k + window] for k in range(0, len(agree), window))
+        for chunk in chunks:
+            if len(chunk) < 2:
+                continue
+            result.windows += 1
+            result.covered_variants += len(chunk)
+            result.hamming += min(sum(1 for a in chunk if a), sum(1 for a in chunk if not a))
+    return result
+
+
 def evaluate_junctions(overlapping_sites, target, gt):
     """Score only the connections *between* phase blocks.
 
@@ -432,6 +527,12 @@ def evaluate_junctions(overlapping_sites, target, gt):
     the pairs that :func:`evaluate_phasing` cannot see but the chromosome-wide
     comparison adds.  An error means the two blocks were joined in the wrong
     orientation relative to the truth.
+
+    Every such pair is scored, so that the within-block pairs and these together
+    partition the chromosome-wide comparison.  Pairs touching a single-variant
+    target block are additionally counted on their own: such a block is a call set
+    fragmenting its own phasing, and it contributes two junctions where an intact
+    block would contribute one.  See :func:`target_block_sizes`.
     """
     blocks, _, _ = group_blocks(overlapping_sites, target, gt)
     block_of = {}
@@ -439,14 +540,22 @@ def evaluate_junctions(overlapping_sites, target, gt):
         for pair in block:
             block_of[tuple(pair)] = key
 
+    chains = scorable_chains(overlapping_sites, target, gt)
+    sizes = target_block_sizes(chains, target)
+
     result = JunctionResult(positions=[])
-    for chain in scorable_chains(overlapping_sites, target, gt).values():
+    for chain in chains.values():
         agree = agreement(chain, target, gt)
         for k in range(len(chain) - 1):
             if block_of[chain[k]] == block_of[chain[k + 1]]:
                 continue
             result.junctions += 1
-            if agree[k] != agree[k + 1]:
+            error = agree[k] != agree[k + 1]
+            if any(sizes[(target.chromosome[i], int(target.phase_block[i]))] == 1
+                   for i, _ in (chain[k], chain[k + 1])):
+                result.at_singleton += 1
+                result.errors_at_singleton += error
+            if error:
                 result.errors += 1
                 result.positions.append(interval(target, chain[k][0], chain[k + 1][0]))
     return result
@@ -684,14 +793,24 @@ def baseline_block_map(target, baseline, match='strict'):
 def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
     """Score only the connections the target established but the baseline did not.
 
-    Walks the comparable variants of each chromosome in position order, keeping
-    only those the baseline also phases -- so a variant the baseline cannot
-    place is stepped over and the nearest phased variants on either side are
-    compared directly.  An adjacent pair is a *new connection* when the target
-    puts both variants in one phase block, the baseline puts them in two, and
-    the truth phases both within one block to supply a common frame.  It is an
-    error when the two disagree in orientation relative to the truth, i.e. the
-    baseline blocks were joined the wrong way round.
+    Walks each *target phase block* in position order, keeping only the variants
+    the baseline also phases -- so a variant the baseline cannot place is stepped
+    over and the nearest phased variants on either side are compared directly.  A
+    consecutive pair within one target block is a *new connection* when the
+    baseline puts the two variants in different blocks and the truth phases both
+    within one block to supply a common frame.  It is an error when the two
+    disagree in orientation relative to the truth, i.e. the baseline blocks were
+    joined the wrong way round.
+
+    Walking per target block rather than along the whole chromosome is what makes
+    the scan robust to a call set that strands variants at the old PS: methphaser
+    relabels and flips a merged block but leaves its first variant behind, so the
+    two variants either side of the join are *not* adjacent on the chromosome.
+    The stranded variant lands in a block of its own, contributes nothing, and the
+    join is scored between the variants that actually carry the decision.  It must
+    not be folded back into the surrounding block instead: it still holds the
+    un-flipped genotype, so scoring against it would test the base phaser's
+    arbitrary cross-block orientation rather than the join.
 
     Note that new connections are a subset of the pairs
     :func:`evaluate_phasing` assesses *within* blocks, not of the ones
@@ -705,8 +824,7 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
             block_of[tuple(pair)] = key
 
     result = JunctionResult(positions=[])
-    chains: Dict[str, List[tuple]] = defaultdict(list)
-    scored_target: Counter = Counter()
+    chains: Dict[tuple, List[tuple]] = defaultdict(list)
     scored_baseline: Counter = Counter()
     for i, j in overlapping_sites:
         pair = (int(i), int(j))
@@ -715,15 +833,16 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
         if pair[0] not in baseline_of:
             result.skipped_no_baseline_phase += 1
             continue
-        # Both counts are taken over exactly the variants scanned below, so that
-        # baseline blocks - target blocks equals the number of joins seen.
-        scored_target[(target.chromosome[i], target.phase_block[i])] += 1
         scored_baseline[baseline_of[pair[0]]] += 1
-        chains[target.chromosome[i]].append(pair)
+        chains[(target.chromosome[i], int(target.phase_block[i]))].append(pair)
 
-    result.target_blocks = len(scored_target)
+    # Both counts are taken over exactly the variants scanned below.  Their
+    # difference is the number of joins only when the target left no block
+    # fragmented; singleton_target_blocks is exactly what accounts for the gap.
+    result.target_blocks = len(chains)
     result.baseline_blocks = len(scored_baseline)
     result.singleton_baseline_blocks = sum(1 for n in scored_baseline.values() if n == 1)
+    result.singleton_target_blocks = sum(1 for chain in chains.values() if len(chain) == 1)
 
     # How many joins the target made in total, counted over every variant it and
     # the baseline both phase -- independent of whether the truth can score them,
@@ -736,13 +855,13 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
 
     for chain in chains.values():
         agree = agreement(chain, target, gt)
+        changes = 0
         for k in range(len(chain) - 1):
             (i0, j0), (i1, j1) = chain[k], chain[k + 1]
-            if target.phase_block[i0] != target.phase_block[i1]:
-                continue                        # the target claims no connection here
             if baseline_of[i0] == baseline_of[i1]:
                 result.preexisting += 1         # the baseline already made it
                 continue
+            changes += 1
             if gt.phase_block[j0] != gt.phase_block[j1]:
                 result.no_truth_frame += 1      # no shared frame to judge against
                 continue
@@ -750,6 +869,11 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
             if agree[k] != agree[k + 1]:
                 result.errors += 1
                 result.positions.append(interval(target, chain[k][0], chain[k + 1][0]))
+        # A block whose baseline blocks alternate along it would be scanned as
+        # more joins than it made.  Never seen in practice; counted so that it
+        # cannot pass unnoticed if it starts happening.
+        if changes > len({baseline_of[i] for i, _ in chain}) - 1:
+            result.interleaved_blocks += 1
     return result
 
 
@@ -786,8 +910,20 @@ def report_switches(result, header):
     print_stat('Different genotypes [%]', percent(result.diff_genotypes, result.covered_variants))
 
 
+def report_windows(result, header):
+    print()
+    print(f'{header}:'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
+    print_stat(f'window size [{result.unit}]', result.window)
+    print_stat('windows scored', result.windows)
+    print_stat('--> covered variants', result.covered_variants)
+    print_stat('Windowed Hamming distance', result.hamming)
+    print_stat('Windowed Hamming distance [%]',
+               percent(result.hamming, result.covered_variants))
+
+
 def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
-           new_connections=None, sv=None, genes=None, names=('truth', 'query')):
+           new_connections=None, sv=None, genes=None, names=('truth', 'query'),
+           windowed=None):
     gt_name, target_name = names
     print('VARIANT COUNTS (heterozygous / all): ')
     for name, vs in ((gt_name, gt), (target_name, target)):
@@ -807,6 +943,11 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
     print_stat('--> covered variants', within.covered_variants)
 
     report_switches(within, 'WITHIN PHASE BLOCKS')
+
+    for prefix, _, header in WINDOW_SECTIONS:
+        result = (windowed or {}).get(prefix)
+        if result is not None:
+            report_windows(result, header)
 
     if sv is not None:
         print()
@@ -829,6 +970,13 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
     print_stat('block junctions assessed', junctions.junctions)
     print_stat('junction errors', junctions.errors)
     print_stat('junction error rate', percent(junctions.errors, junctions.junctions))
+    print_stat('--> at a singleton target block', junctions.at_singleton)
+    print_stat('--> of those, errors', junctions.errors_at_singleton)
+    print_stat('excluding those, junctions', junctions.junctions - junctions.at_singleton)
+    print_stat('--> errors', junctions.errors - junctions.errors_at_singleton)
+    print_stat('--> error rate',
+               percent(junctions.errors - junctions.errors_at_singleton,
+                       junctions.junctions - junctions.at_singleton))
 
     if new_connections is not None:
         n = new_connections
@@ -841,6 +989,8 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
         print_stat('--> target blocks they form', n.target_blocks)
         print_stat('--> joins between them', n.baseline_blocks - n.target_blocks)
         print_stat('of those, holding one scorable variant', n.singleton_baseline_blocks)
+        print_stat('target blocks holding one scorable variant', n.singleton_target_blocks)
+        print_stat('target blocks with interleaved baseline blocks', n.interleaved_blocks)
         print_stat('joins the target made over all variants', n.structural_joins)
         print_stat('--> not assessed, no truth variant',
                    n.structural_joins - n.junctions - n.no_truth_frame)
@@ -887,8 +1037,22 @@ def switch_columns(prefix, result):
     }
 
 
+def window_columns(prefix, result):
+    """The five windowed-Hamming statistics, named under one section prefix."""
+    if result is None:
+        keys = ('window', 'windows', 'covered_variants', 'hamming', 'hamming_rate')
+        return {f'{prefix}_{k}': '' for k in keys}
+    return {
+        f'{prefix}_window': result.window,
+        f'{prefix}_windows': result.windows,
+        f'{prefix}_covered_variants': result.covered_variants,
+        f'{prefix}_hamming': result.hamming,
+        f'{prefix}_hamming_rate': fraction(result.hamming, result.covered_variants),
+    }
+
+
 def collect_summary(args, target, gt, overlapping_sites, within, junctions, chromosome_wide,
-                    new_connections=None, sv=None, genes=None):
+                    new_connections=None, sv=None, genes=None, windowed=None):
     """Every statistic the report prints, as one flat row.
 
     Built from the same result objects report() reads, so the two cannot disagree.
@@ -927,17 +1091,27 @@ def collect_summary(args, target, gt, overlapping_sites, within, junctions, chro
     }
     row.update(switch_columns('within', within))
     row.update(switch_columns('chrwide', chromosome_wide))
+    for prefix, _, _ in WINDOW_SECTIONS:
+        row.update(window_columns(prefix, (windowed or {}).get(prefix)))
 
+    clean_junctions = junctions.junctions - junctions.at_singleton
+    clean_errors = junctions.errors - junctions.errors_at_singleton
     row.update({
         'junction_assessed': junctions.junctions,
         'junction_errors': junctions.errors,
         'junction_rate': fraction(junctions.errors, junctions.junctions),
+        'junction_at_singleton': junctions.at_singleton,
+        'junction_errors_at_singleton': junctions.errors_at_singleton,
+        'junction_assessed_intact': clean_junctions,
+        'junction_errors_intact': clean_errors,
+        'junction_rate_intact': fraction(clean_errors, clean_junctions),
     })
 
     if new_connections is None:
         row.update({f'newconn_{k}': '' for k in (
             'assessed', 'errors', 'rate', 'baseline_blocks', 'target_blocks', 'joins_between',
-            'singleton_baseline_blocks', 'joins_total', 'not_assessed_no_truth_variant',
+            'singleton_baseline_blocks', 'singleton_target_blocks', 'interleaved_blocks',
+            'joins_total', 'not_assessed_no_truth_variant',
             'not_assessed_no_truth_frame', 'skipped_unphased_baseline')})
     else:
         n = new_connections
@@ -949,6 +1123,8 @@ def collect_summary(args, target, gt, overlapping_sites, within, junctions, chro
             'newconn_target_blocks': n.target_blocks,
             'newconn_joins_between': n.baseline_blocks - n.target_blocks,
             'newconn_singleton_baseline_blocks': n.singleton_baseline_blocks,
+            'newconn_singleton_target_blocks': n.singleton_target_blocks,
+            'newconn_interleaved_blocks': n.interleaved_blocks,
             'newconn_joins_total': n.structural_joins,
             'newconn_not_assessed_no_truth_variant':
                 n.structural_joins - n.junctions - n.no_truth_frame,
@@ -1025,6 +1201,17 @@ def main(argv):
                         help="How to pair variants across the two files. 'strict' uses "
                              "(position, REF, ALT) like whatshap; 'alleles' pairs any two "
                              "sites carrying the same unordered allele pair.")
+    parser.add_argument('--hamming_window', type=int, default=100000, metavar='BP',
+                        help='Additionally score the Hamming distance in windows of this many '
+                             'bp, which unlike the block-wise Hamming distance does not grow '
+                             'with phase block length and so is comparable between call sets '
+                             'whose blocks differ in length. Pick it well below the smallest '
+                             'block N50 being compared. 0 turns the test off. (default: '
+                             '%(default)s)')
+    parser.add_argument('--hamming_window_variants', type=int, default=100, metavar='N',
+                        help='The same test with the window fixed at this many consecutive '
+                             'comparable variants instead of a span. 0 turns it off. '
+                             '(default: %(default)s)')
     parser.add_argument('--switch_error_bed',
                         help='Write within-block switch error intervals to this BED file')
     parser.add_argument('--junction_error_bed',
@@ -1073,6 +1260,11 @@ def main(argv):
     junctions = evaluate_junctions(overlapping_sites, target, gt)
     # both together: every consecutive pair of comparable variants on a chromosome
     chromosome_wide = evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=True)
+    # the block-length-independent counterpart of the block-wise Hamming distance
+    sizes = {'winbp': args.hamming_window, 'winvar': args.hamming_window_variants}
+    windowed = {prefix: evaluate_windowed_hamming(overlapping_sites, target, gt,
+                                                  sizes[prefix], unit)
+                for prefix, unit, _ in WINDOW_SECTIONS if sizes[prefix] > 0}
 
     new_connections = None
     if args.baseline_vcf:
@@ -1091,12 +1283,12 @@ def main(argv):
         genes = evaluate_genes(overlapping_sites, target, gt, exons)
 
     report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
-           new_connections, sv, genes)
+           new_connections, sv, genes, windowed=windowed)
 
     if args.summary_tsv:
         write_summary_tsv(args.summary_tsv,
                           collect_summary(args, target, gt, overlapping_sites, within, junctions,
-                                          chromosome_wide, new_connections, sv, genes))
+                                          chromosome_wide, new_connections, sv, genes, windowed))
 
     if args.switch_error_bed:
         write_bed(args.switch_error_bed, within.switch_positions, 'switch')
