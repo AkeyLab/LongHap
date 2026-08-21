@@ -20,7 +20,7 @@ sex_chromosomes = []
 phasing_methods = ['whatshap', 'whatshap_and_methphaser', 'longhap_meth',
                    "longhap", 'hapcut2', "longphase"]# 'haplomaker',
 
-seq_tech = ['hifi']#, 'ont_r10.4.1_dorado', 'ul_ont_r10.4.1_dorado']
+seq_tech = ['ont_r10.4.1_dorado']#, 'ul_ont_r10.4.1_dorado', 'hifi'
 
 rule all:
     input:
