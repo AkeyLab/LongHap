@@ -932,7 +932,7 @@ rule run_methphaser:
     threads: 1
     benchmark: base_results_dir + "HG002/deepvariant/{seq_tech}_{aligner}_methphaser_{chrom}.{variant_type}.benchmark"
     resources:
-        runtime=10 * 60,
+        runtime=14 * 60,
         mem_mb=24 * 1024
     wildcard_constraints:
         variant_type='snps|snps_indels',
