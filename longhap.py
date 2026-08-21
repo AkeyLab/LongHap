@@ -15,17 +15,10 @@ from scipy.sparse import csc_array
 import json
 import re
 from scipy.special import logsumexp
-import parasail
+# import parasail
+# import contextlib
+import io
 logging.getLogger(__name__)
-
-
-class NestedDict:
-    def __init__(self):
-        pass
-
-    @classmethod
-    def nested_defaultdict(cls):
-        return defaultdict(list)
 
 
 class LongHap:
@@ -35,9 +28,11 @@ class LongHap:
                  output_variant_read_mapping=None, output_allele_coverage=None, output_transition_matrix_meth=None,
                  output_differentially_methylated_sites=None,
                  output_unphaseable_variants=None, snvs_only=False, multiallelics=False,
-                 use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh=4,
-                 sample=None, force=False, max_allele_length=50000, min_allele_count=2, min_base_quality=0, min_mapq=20,
-                 flank_snv=33, flank_indel=100, seqtech='pacbio'):
+                 use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh=3,
+                 sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
+                 min_base_quality=0, min_mapq=20,
+                 # flank_snv=33, flank_indel=100,
+                 seqtech='pacbio'):
         self.chrom = chrom
         self.snvs_only = snvs_only
         self.multiallelics = multiallelics
@@ -45,7 +40,6 @@ class LongHap:
         self.bam = bam
         self.reference_path = reference_path
         self.methylation_calls_f = methylation_calls_f
-        self.prev_methylations = None
         self.use_all_methylated_sites = use_all_methylated_sites
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
@@ -53,25 +47,33 @@ class LongHap:
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
-        self.output_read_assignments = output_read_assignments
         self.output_transition_matrix = output_transition_matrix
+        self.output_transition_matrix_meth = output_transition_matrix_meth
         self.output_allele_coverage = output_allele_coverage
+        self.output_unphaseable_variants = output_unphaseable_variants
+        self.output_read_assignments = output_read_assignments
         self.output_read_states = output_read_states
         self.output_variant_read_mapping = output_variant_read_mapping
-        self.output_transition_matrix_meth = output_transition_matrix_meth
         self.output_differentially_methylated_sites = output_differentially_methylated_sites
-        self.output_unphaseable_variants = output_unphaseable_variants
         self.sample = sample
         self.force = force
         self.max_allele_length = max_allele_length
         self.min_allele_count = min_allele_count
+        self.min_allele_count_meth = min_allele_count_meth
         self.min_base_quality = min_base_quality
         self.min_mapq = min_mapq
-        self.flank_snv = flank_snv
-        self.flank_indel = flank_indel
+        # self.flank_snv = flank_snv
+        # self.flank_indel = flank_indel
         self.seqtech = seqtech
 
+        for attr in ('output_transition_matrix', 'output_transition_matrix_meth',
+                     'output_allele_coverage', 'output_unphaseable_variants'):
+            path = getattr(self, attr)
+            if path is not None and not path.endswith('.npz'):
+                setattr(self, attr, path + '.npz')
+
         self.methylation_read_assignments = defaultdict(list)
+        self.prev_methylations = dict()
 
         if self.chrom is None:
             variant_calls = VCF(self.vcf_f)
@@ -92,7 +94,7 @@ class LongHap:
         self.idx_variant_mapping, self.variant_idx_mapping, self.variant_type = self.get_heterozygous_variants()
         self.num_variants = len(self.idx_variant_mapping)
         # intialize transition_matrix
-        self.transition_matrix = np.zeros((2, 2, self.num_variants - 1)) + 1e-20
+        self.transition_matrix = np.zeros((2, 2, max(self.num_variants - 1, 0))) + 1e-20
         self.allele_coverage = np.zeros((2, self.num_variants))
         logging.info(f'Loading read alignments from {self.bam}')
         if not os.path.isfile(self.bam):
@@ -326,7 +328,8 @@ class LongHap:
         offset = position - read_start
         while cigar:
             # do not count soft clips and insertions
-            if length + ref_offset > offset and operation != 4 and operation != 1:
+            if (length + ref_offset > offset
+                    and operation not in (1, 4, 5, 6)):
                 break
             # match
             if operation == 0 or operation == 7:
@@ -345,6 +348,10 @@ class LongHap:
             # soft clip, query does not appear in alignment
             elif operation == 4:
                 query_offset += length
+            elif operation == 3:  # N, reference skip
+                ref_offset += length
+            elif operation == 5 or operation == 6:  # H, P: consume neither
+                pass
             operation, length = cigar.popleft()
         # last operation is soft clip --> don't increment reference offset
         # TODO make sure that this works as intended
@@ -386,7 +393,7 @@ class LongHap:
                                                                                                 query_offset, operation,
                                                                                                 length)
         if qpos == -1:
-            return -1
+            return -1, qpos, r_idx, operation, length
 
         state = None
         # SNV
@@ -433,14 +440,15 @@ class LongHap:
 
             if qpos == -1 or q_after == -1 or q_after <= qpos:
                 state = -1
-            insertion_seq = query_sequence[qpos + 1:q_after]
-            if insertion_seq == "":
-                state = 0
-            elif insertion_seq == allele_b[len(allele_ref):]:
-                state = 1
             else:
-                # do realignment
-                pass
+                insertion_seq = query_sequence[qpos + 1:q_after]
+                if insertion_seq == "":
+                    state = 0
+                elif insertion_seq == allele_b[len(allele_ref):]:
+                    state = 1
+                else:
+                    # do realignment
+                    pass
 
         # deletion
         elif allele_ref == allele_a and len(allele_ref) > len(allele_b):
@@ -464,90 +472,90 @@ class LongHap:
 
         return state, qpos, r_idx, operation, length
 
-    @staticmethod
-    def get_adaptive_gap_penalties(cigartuples):
-        matches = np.sum([length for op, length in cigartuples if op in (0, 7)])
-        mismatches = np.sum([length for op, length in cigartuples if op == 8])
-        ins = np.sum([length for op, length in cigartuples if op == 1])
-        dels = np.sum([length for op, length in cigartuples if op == 2])
-        total = matches + mismatches + ins + dels
-        if total == 0:
-            return 5, 1
-        indel_rate = (ins + dels) / total
-        mismatch_rate = mismatches / total
-        if indel_rate < 0.005:
-            gap_open, gap_extend = 7, 2
-        elif indel_rate < 0.02:
-            gap_open, gap_extend = 5, 1
-        elif indel_rate < 0.05:
-            gap_open, gap_extend = 4, 1
-        else:
-            gap_open, gap_extend = 3, 1
-        return gap_open, gap_extend, indel_rate, mismatch_rate
+    # @staticmethod
+    # def get_adaptive_gap_penalties(cigartuples):
+    #     matches = np.sum([length for op, length in cigartuples if op in (0, 7)])
+    #     mismatches = np.sum([length for op, length in cigartuples if op == 8])
+    #     ins = np.sum([length for op, length in cigartuples if op == 1])
+    #     dels = np.sum([length for op, length in cigartuples if op == 2])
+    #     total = matches + mismatches + ins + dels
+    #     if total == 0:
+    #         return 5, 1, 0, 0
+    #     indel_rate = (ins + dels) / total
+    #     mismatch_rate = mismatches / total
+    #     if indel_rate < 0.005:
+    #         gap_open, gap_extend = 7, 2
+    #     elif indel_rate < 0.02:
+    #         gap_open, gap_extend = 5, 1
+    #     elif indel_rate < 0.05:
+    #         gap_open, gap_extend = 4, 1
+    #     else:
+    #         gap_open, gap_extend = 3, 1
+    #     return gap_open, gap_extend, indel_rate, mismatch_rate
 
-    def realign_around_variant(self, query_sequence, variant, qpos,
-                               gap_open, gap_extend, homopolymer=False):
-        """
-        Realign sub-reads around complex variants
-        :param query_sequence:  str, read query sequence
-        :param variant: dict, complex variant
-        :param qpos: int, index of variant in read
-        :param gap_open: int, gap open penalty for alignment
-        :param gap_extend: int, gap extend penalty for alignment
-        :param homopolymer: boolean, whether the variant is in a homopolymer region
-        :return: int, allelic state
-        """
-        # extract variant info
-        allele_ref = variant['REF']
-        allele_a = variant['alleles'][variant['gt'][0]]
-        allele_b = variant['alleles'][variant['gt'][1]]
-        position = variant['POS'] - 1
-        max_allele_len = np.max([len(allele_ref), len(allele_a), len(allele_b)])
-        if max_allele_len == 1:
-            flank = self.flank_snv
-        else:
-            flank = self.flank_indel
-        # for SNPs choose smaller window and penalize gaps more
-        if max_allele_len == 1:
-            gap_open = int(gap_open * 2)
-        if homopolymer:
-            gap_open -= 2
-        # get read window
-        start = np.max([0, qpos - flank])
-        end = np.min([len(query_sequence),
-                      qpos + max_allele_len + flank])
-
-        read_window = query_sequence[start:end]
-        # get corresponding reference window with allele A and B inserted respectively
-        flank_up = qpos - start
-        flank_down = end - (qpos + np.max([len(allele_ref), len(allele_a), len(allele_b)]))
-        upstream = self.reference[position - flank_up: position].seq.upper()
-
-        downstream_a = self.reference[position + len(allele_ref): position + len(allele_ref) + flank_down +
-                                                                  (max_allele_len - len(allele_a))].seq.upper()
-
-        ref_allele_a = str(upstream + allele_a + downstream_a)
-
-        downstream_b = self.reference[position + len(allele_ref): position + len(allele_ref) + flank_down +
-                                                                  (max_allele_len - len(allele_b))].seq.upper()
-
-        ref_allele_b = str(upstream + allele_b + downstream_b)
-
-        aln_a = parasail.sg_stats_striped_sat(read_window, ref_allele_a, gap_open, gap_extend, parasail.dnafull)
-        aln_b = parasail.sg_stats_striped_sat(read_window, ref_allele_b, gap_open, gap_extend, parasail.dnafull)
-
-        # Compare alignment scores
-        score_a = aln_a.score
-        score_b = aln_b.score
-
-        if score_a > score_b:
-            state = 0
-        elif score_b > score_a:
-            state = 1
-        else:
-            state = -1
-
-        return state
+    # def realign_around_variant(self, query_sequence, variant, qpos,
+    #                            gap_open, gap_extend, homopolymer=False):
+    #     """
+    #     Realign sub-reads around complex variants
+    #     :param query_sequence:  str, read query sequence
+    #     :param variant: dict, complex variant
+    #     :param qpos: int, index of variant in read
+    #     :param gap_open: int, gap open penalty for alignment
+    #     :param gap_extend: int, gap extend penalty for alignment
+    #     :param homopolymer: boolean, whether the variant is in a homopolymer region
+    #     :return: int, allelic state
+    #     """
+    #     # extract variant info
+    #     allele_ref = variant['REF']
+    #     allele_a = variant['alleles'][variant['gt'][0]]
+    #     allele_b = variant['alleles'][variant['gt'][1]]
+    #     position = variant['POS'] - 1
+    #     max_allele_len = np.max([len(allele_ref), len(allele_a), len(allele_b)])
+    #     if max_allele_len == 1:
+    #         flank = self.flank_snv
+    #     else:
+    #         flank = self.flank_indel
+    #     # for SNPs choose smaller window and penalize gaps more
+    #     if max_allele_len == 1:
+    #         gap_open = int(gap_open * 2)
+    #     if homopolymer:
+    #         gap_open -= 2
+    #     # get read window
+    #     start = np.max([0, qpos - flank])
+    #     end = np.min([len(query_sequence),
+    #                   qpos + max_allele_len + flank])
+    #
+    #     read_window = query_sequence[start:end]
+    #     # get corresponding reference window with allele A and B inserted respectively
+    #     flank_up = qpos - start
+    #     flank_down = end - (qpos + np.max([len(allele_ref), len(allele_a), len(allele_b)]))
+    #     upstream = self.reference[position - flank_up: position].seq.upper()
+    #
+    #     downstream_a = self.reference[position + len(allele_ref): position + len(allele_ref) + flank_down +
+    #                                                               (max_allele_len - len(allele_a))].seq.upper()
+    #
+    #     ref_allele_a = str(upstream + allele_a + downstream_a)
+    #
+    #     downstream_b = self.reference[position + len(allele_ref): position + len(allele_ref) + flank_down +
+    #                                                               (max_allele_len - len(allele_b))].seq.upper()
+    #
+    #     ref_allele_b = str(upstream + allele_b + downstream_b)
+    #
+    #     aln_a = parasail.sg_stats_striped_sat(read_window, ref_allele_a, gap_open, gap_extend, parasail.dnafull)
+    #     aln_b = parasail.sg_stats_striped_sat(read_window, ref_allele_b, gap_open, gap_extend, parasail.dnafull)
+    #
+    #     # Compare alignment scores
+    #     score_a = aln_a.score
+    #     score_b = aln_b.score
+    #
+    #     if score_a > score_b:
+    #         state = 0
+    #     elif score_b > score_a:
+    #         state = 1
+    #     else:
+    #         state = -1
+    #
+    #     return state
 
     @staticmethod
     def mirror_transition(t, normalized=True):
@@ -557,6 +565,7 @@ class LongHap:
         :param normalized: boolean, whether the transition_matrix has been normalized to values between 0 and 1
         :return: 2x2 np.array, mirrored, symmetric transition matrix
         """
+        t = np.array(t, dtype=float, copy=True)
         # # step from alternative allele is more certain than from reference allele
         if (np.abs(np.log(t[0, 0] / t[0, 1])) < np.abs(np.log(t[1, 0] / t[1, 1])) and
                 (t[1, :].max() > 1 or t[0, :].max() <= 1 or normalized) and np.unique(t.argmax(axis=1)).shape[0] > 1):
@@ -658,19 +667,32 @@ class LongHap:
         :param i: int, number of subsequent transitions that were inferred
         :return: np.array, modified phase transition matrix
         """
+        a, b = hap[i], hap[i + 1]
+
+        if np.isnan(a) or np.isnan(b) or abs(a - 0.5) < 0.1 or abs(b - 0.5) < 0.1:
+            return np.full((2, 2), 0.5)
+
         transition_matrix = np.zeros((2, 2)) + 1e-20
-        if np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 1:
-            transition_matrix[1, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
-            transition_matrix[1, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
-        elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 0:
-            transition_matrix[0, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
-            transition_matrix[0, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
-        elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 1:
-            transition_matrix[0, 0] = np.max([1 - np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
-            transition_matrix[0, 1] = np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
-        elif np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 0:
-            transition_matrix[1, 1] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20]), 1e-20])
-            transition_matrix[1, 0] = np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20])
+
+        s_a, s_b = int(a > 0.5), int(b > 0.5)
+        c_a, c_b = max(a, 1 - a), max(b, 1 - b)
+        p = (c_a * c_b) / (c_a * c_b + (1 - c_a) * (1 - c_b) + 1e-100)
+
+        transition_matrix[s_a, s_b] = max(p, 1e-20)
+        transition_matrix[s_a, 1 - s_b] = max(1 - p, 1e-20)
+
+        # if np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 1:
+        #     transition_matrix[1, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
+        #     transition_matrix[1, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
+        # elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 0:
+        #     transition_matrix[0, 0] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
+        #     transition_matrix[0, 1] = np.max([hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
+        # elif np.round(hap).astype(int)[i] == 0 and np.round(hap).astype(int)[i + 1] == 1:
+        #     transition_matrix[0, 0] = np.max([1 - np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20]), 1e-20])
+        #     transition_matrix[0, 1] = np.max([1 - hap[i], 1e-20]) * np.max([hap[i + 1], 1e-20])
+        # elif np.round(hap).astype(int)[i] == 1 and np.round(hap).astype(int)[i + 1] == 0:
+        #     transition_matrix[1, 1] = np.max([1 - np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20]), 1e-20])
+        #     transition_matrix[1, 0] = np.max([hap[i], 1e-20]) * np.max([1 - hap[i + 1], 1e-20])
 
         transition_matrix = LongHap.mirror_transition(transition_matrix, normalized=True)
         return transition_matrix
@@ -687,15 +709,19 @@ class LongHap:
         :param idx: int, index of target transition that was inferred from methylation dats
         :return: np.array, modified phase transition matrix
         """
-        if (hap1_cov[i] < self.min_allele_count or hap1_cov[i + 1] < self.min_allele_count or
-                hap2_cov[i] < self.min_allele_count or hap2_cov[i + 1] < self.min_allele_count):
+        min_cov = max(self.min_allele_count, self.min_allele_count_meth)
+        if (hap1_cov[i] < min_cov or hap1_cov[i + 1] < min_cov or
+                hap2_cov[i] < min_cov or hap2_cov[i + 1] < min_cov):
             pass
         else:
             t1 = self.calculate_transition_probability_from_methylation_helper(hap1, i)
             t2 = self.calculate_transition_probability_from_methylation_helper(hap2, i)
             cov_hap1 = (hap1_cov[i] + hap1_cov[i + 1]) / 2
             cov_hap2 = (hap2_cov[i] + hap2_cov[i + 1]) / 2
-            self.transition_matrix[:, :, idx] = (t1 * cov_hap1 + t2 * cov_hap2) / (cov_hap1 + cov_hap2 + 1e-100)
+            if np.allclose(t1, 0.5) and np.allclose(t2, 0.5):
+                pass
+            else:
+                self.transition_matrix[:, :, idx] = (t1 * cov_hap1 + t2 * cov_hap2) / (cov_hap1 + cov_hap2 + 1e-100)
 
     @staticmethod
     def get_read_methylation(methylations, positions, cigar, read_start, read_end, ref_offset, query_offset, operation,
@@ -828,10 +854,12 @@ class LongHap:
             mod[i] = np.sum(mod_condition_mask[start_idx:end_idx])
 
         df_hap['hap'] = hap
-        df_hap['coverage'] = cov
         df_hap['mod_count'] = mod
         df_hap['unmod_count'] = cov - mod
-        df_hap['ratio'] = (mod / cov) * 100
+        ratio = np.full_like(mod, np.nan, dtype=float)
+        np.divide(mod, cov, out=ratio, where=(cov > 0))
+        df_hap['ratio'] = ratio * 100
+        df_hap['coverage'] = cov
         return df_hap
 
     def get_methylation_transitions(self, idx_var_a, idx_var_b):
@@ -866,30 +894,18 @@ class LongHap:
         variant_homopolymer_mapping = {}
         for read in self.alignments.fetch(self.chrom, start, end + 1):
             # only consider primary alignments
-            if (read.is_secondary or read.is_duplicate or read.is_unmapped or
+            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_supplementary or
                     read.is_qcfail or read.mapping_quality < self.min_mapq or not read.has_tag("MM")):
                 continue
             read_name = read.query_name
-            if self.prev_methylations is not None:
-                if read_name in self.prev_methylations:
-                    (methylations, cigar, read_start, read_end, ref_offset,
-                     query_offset, operation, length, mm_tags, ml_tags) = self.prev_methylations[read_name]
-                    (read_methylation, cigar, ref_offset,
-                     query_offset, operation, length) = self.get_read_methylation(methylations, positions, cigar,
-                                                                                  read_start, read_end, ref_offset,
-                                                                                  query_offset, operation,
-                                                                                  length, mm_tags, ml_tags)
-                else:
-                    (cigar, read_start, read_end, ref_offset, query_offset,
-                     operation, length, mm_tags, ml_tags) = self.get_read_info(read)
-                    (read_methylation, cigar, ref_offset,
-                     query_offset, operation, length) = self.get_read_methylation({}, positions, cigar,
-                                                                                  read_start, read_end, ref_offset,
-                                                                                  query_offset, operation,
-                                                                                  length, mm_tags, ml_tags)
-                self.prev_methylations[read_name] = ({m_pos: m for m_pos, m in zip(positions, read_methylation)},
-                                                           cigar, read_start, read_end, ref_offset, query_offset,
-                                                           operation, length, mm_tags, ml_tags)
+            if read_name in self.prev_methylations:
+                (methylations, cigar, read_start, read_end, ref_offset,
+                 query_offset, operation, length, mm_tags, ml_tags) = self.prev_methylations[read_name]
+                (read_methylation, cigar, ref_offset,
+                 query_offset, operation, length) = self.get_read_methylation(methylations, positions, cigar,
+                                                                              read_start, read_end, ref_offset,
+                                                                              query_offset, operation,
+                                                                              length, mm_tags, ml_tags)
             else:
                 (cigar, read_start, read_end, ref_offset, query_offset,
                  operation, length, mm_tags, ml_tags) = self.get_read_info(read)
@@ -898,6 +914,9 @@ class LongHap:
                                                                               read_start, read_end, ref_offset,
                                                                               query_offset, operation,
                                                                               length, mm_tags, ml_tags)
+                self.prev_methylations[read_name] = ({m_pos: m for m_pos, m in zip(positions, read_methylation)},
+                                                           cigar, read_start, read_end, ref_offset, query_offset,
+                                                           operation, length, mm_tags, ml_tags)
 
             # get allele states
             read_idx_states = np.zeros(idx_var_b - idx_var_a + 1).astype(int) - 1
@@ -911,7 +930,7 @@ class LongHap:
                     # this can only really happen if a read only overlaps one variant and thus wasn't looked at before
                     # I think it might still be informative for methylation patterns though
                     cigar = deque(read.cigartuples)
-                    gap_open, gap_extend, indel_rate, mismatch_rate = self.get_adaptive_gap_penalties(cigar)
+                    # gap_open, gap_extend, indel_rate, mismatch_rate = self.get_adaptive_gap_penalties(cigar)
                     pos = self.idx_variant_mapping[n]['POS'] - 1
                     read_start = read.reference_start
                     read_sequence = read.query_sequence
@@ -920,17 +939,20 @@ class LongHap:
                     q_idx = 0
                     operation = None
                     length = 0
-                    if i not in variant_homopolymer_mapping:
-                        variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
-                                                                             k=4)
+                    # if n not in variant_homopolymer_mapping:
+                    #     variant_homopolymer_mapping[n] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
+                    #                                                          k=4)
                     state, qpos, _, _, _ = self.get_state_at_variant(read_sequence, read_base_qualities, cigar,
                                                                      read_start, r_idx, q_idx, operation, length,
                                                                      self.idx_variant_mapping[n])
                     if state is None:
-                        state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
-                                                            qpos, gap_open, gap_extend,
-                                                            variant_homopolymer_mapping[n])
-                        self.read_states[read_name][str(n)] = state
+                        # state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
+                        #                                     qpos, gap_open, gap_extend,
+                        #                                     variant_homopolymer_mapping[n])
+                        # self.read_states[read_name][str(n)] = state
+                        state = -1
+                        self.read_states[read_name][str(n)] = -1
+
                     read_idx_states[i] = state
                 else:
                     read_idx_states[i] = self.read_states[read_name][str(n)]
@@ -1001,23 +1023,28 @@ class LongHap:
         while len(unassigned) > 0 and not np.array_equal(unassigned, prev_unassigned):
             meth_hap1 = methylation_probs[reads_hap1].sum(axis=0)
             unmeth_hap1 = unmethylated_probs[reads_hap1].sum(axis=0)
-            # methylated sites must have a probability greater than 0.5 and an LLR > 3
-            meth_states_hap1 = np.where((meth_hap1 > np.log10(0.5)) & (meth_hap1 - unmeth_hap1 > 3), 1, 0)
-            # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
-            # meth_states_hap1 = np.where((unmeth_hap1 > np.log10(0.5)) & (unmeth_hap1 - meth_hap1 > 3), 0, meth_states_hap1)
+
+            # methylated sites must have a  an LLR > 3
+            meth_states_hap1 = np.zeros_like(meth_hap1) - 1
+            meth_states_hap1 = np.where(meth_hap1 - unmeth_hap1 > self.llr_thresh, 1, meth_states_hap1)
+            # unmethylated sites must have  an LLR < -3
+            meth_states_hap1 = np.where(unmeth_hap1 - meth_hap1 > self.llr_thresh, 0, meth_states_hap1)
 
             meth_hap2 = methylation_probs[reads_hap2].sum(axis=0)
             unmeth_hap2 = unmethylated_probs[reads_hap2].sum(axis=0)
 
-            # methylated sites must have a probability greater than 0.5 and an LLR > 3
-            meth_states_hap2 = np.where((meth_hap2 > np.log10(0.5)) & (meth_hap2 - unmeth_hap2 > 3), 1, 0)
-            # unmethylated sites must have a probability greater than 0.5 and an LLR < -3
-            # meth_states_hap2 = np.where((unmeth_hap2 > np.log10(0.5)) & (unmeth_hap2 - meth_hap2 > 3), 0, meth_states_hap2)
+            # methylated sites must have an LLR > 3
+            meth_states_hap2 = np.zeros_like(meth_hap2) - 1
+            meth_states_hap2 = np.where(meth_hap2 - unmeth_hap2 > self.llr_thresh, 1, meth_states_hap2)
+            # unmethylated sites must have an LLR < -3
+            meth_states_hap2 = np.where(unmeth_hap2 - meth_hap2 > self.llr_thresh, 0, meth_states_hap2)
 
             # find differentially methylated sites
             diff_meth = np.where((meth_states_hap1 != meth_states_hap2) & # hap1 and hap2 must have different state
                                  (meth_states_hap1 >= 0) &  # hap1 must be defined
                                  (meth_states_hap2 >= 0))[0]  # hap1 must be defined
+
+
 
             methylation_per_read_hap1 = self.get_diff_methylation_sites_per_hap(c_methylation_calls, methylation_probs,
                                                                                 reads_hap1, "hap1")
@@ -1040,18 +1067,17 @@ class LongHap:
                                                                                                 methylation_probs.copy(),
                                                                                                 unmethylated_probs.copy(),
                                                                                                 unassigned, diff_meth))
-
             prev_unassigned = unassigned.copy()
             # assign reads based A > B and A > 0.5
-            reads_hap1 = np.concatenate([reads_hap1, np.array(unassigned)[(p_hap1 > p_hap2) &
-                                                                          (p_hap1 > np.log10(0.5))]])
-            reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[(p_hap2 > p_hap1) &
-                                                                          (p_hap2 > np.log10(0.5))]])
-            unassigned = np.array(unassigned)[~((p_hap1 > p_hap2) & (p_hap1 > np.log10(0.5))) &
-                                              ~((p_hap2 > p_hap1) & (p_hap2 > np.log10(0.5)))]
-        self.methylation_read_assignments['hap1'].extend([(read_ids[i], (idx_var_a, hap1[0]), (idx_var_b, hap1[-1]))
+            reads_hap1 = np.concatenate([reads_hap1, np.array(unassigned)[p_hap1 - p_hap2 > self.llr_thresh]])
+            reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[p_hap2 - p_hap1 > self.llr_thresh]])
+            unassigned = np.array(unassigned)[~(p_hap1 - p_hap2 > self.llr_thresh) &
+                                              ~(p_hap2 - p_hap1 > self.llr_thresh)]
+        v_a = self.phaseable[idx_var_a]
+        v_a1 = self.phaseable[idx_var_a + 1]
+        self.methylation_read_assignments['hap1'].extend([(read_ids[i], (v_a, hap1[0]), (v_a1, hap1[-1]))
                                                           for i in reads_hap1])
-        self.methylation_read_assignments['hap2'].extend([(read_ids[i], (idx_var_a, hap2[0]), (idx_var_b, hap2[-1]))
+        self.methylation_read_assignments['hap2'].extend([(read_ids[i], (v_a, hap2[0]), (v_a1, hap2[-1]))
                                                           for i in reads_hap2])
         # calculate most common variant states at sites flanking uncertain transition
         read_variant_states = np.where(read_variant_states == -1, np.nan, read_variant_states)
@@ -1119,8 +1145,7 @@ class LongHap:
         """
         uncertain_transitions = []
         for i in range(transition_matrix.shape[2]):
-            if ((transition_matrix[0, :, i].min() == 0.5 and transition_matrix[0, :, i].max() == 0.5) and
-                    (transition_matrix[1, :, i].min() == 0.5 and transition_matrix[1, :, i].max() == 0.5)):
+            if np.allclose(transition_matrix[:, :, i], 0.5):
                 uncertain_transitions.append(i)
         uncertain_transitions = deque(uncertain_transitions)
         return uncertain_transitions
@@ -1177,11 +1202,11 @@ class LongHap:
             # paths directly involving the edge from B1 to B2 divided by all possible paths exciting B1
             new_t1[1, 1] = (t1[1, 1] * t2[1, 0] * t3[1, 0] + t1[1, 1] * t2[1, 1] * t3[1, 1]) / \
                            (t1[1, 1] * t2[1, 0] * t3[1, 0] + t1[1, 1] * t2[1, 1] * t3[1, 1] +
-                            t1[1, 0] * t2[0, 0] * t3[1, 0] * t1[1, 0] * t2[0, 1] * t3[1, 1])
+                            t1[1, 0] * t2[0, 0] * t3[1, 0] + t1[1, 0] * t2[0, 1] * t3[1, 1])
             # B1 to A2 must be the complement of B1 to B2
             new_t1[1, 0] = (t1[1, 0] * t2[0, 0] * t3[1, 0] + t1[1, 0] * t2[0, 1] * t3[1, 1]) / \
                            (t1[1, 1] * t2[1, 0] * t3[1, 0] + t1[1, 1] * t2[1, 1] * t3[1, 1] +
-                            t1[1, 0] * t2[0, 0] * t3[1, 0] * t1[1, 0] * t2[0, 1] * t3[1, 1])
+                            t1[1, 0] * t2[0, 0] * t3[1, 0] + t1[1, 0] * t2[0, 1] * t3[1, 1])
 
             # paths directly involving A2 to A3 divided by all paths traversing A2
             new_t2[0, 0] = (t1[0, 0] * t2[0, 0] * t3[0, 0] + t1[1, 0] * t2[0, 0] * t3[1, 0]) / \
@@ -1278,7 +1303,7 @@ class LongHap:
         layer_idx_mapping = {layer_idx[i]: i for i in range(len(layer_idx))}
         # direct adjacent transitions
         for i, idx_a in enumerate(layer_idx[:-1]):
-            t = self.transition_matrix[:, :, idx_a]
+            t = self.transition_matrix[:, :, idx_a].copy()
             t = self.mirror_transition(t, normalized=normalized)
             # normalize rows in linear space, then take log
             cov = t.sum(axis=1).max()
@@ -1314,7 +1339,6 @@ class LongHap:
                 neighbors[i].add(ix_b)
                 neighbors[ix_b].add(i)
                 edges.append((i, ix_b))
-                edges.append((ix_b, i))
                 edges.append((ix_b, i))
                 coverage[(i, ix_b)] = cov
                 coverage[(ix_b, i)] = cov
@@ -1467,8 +1491,8 @@ class LongHap:
 
                 # can connect the blocks
                 # TODO only having the first conditions gives a lower error
-                if ((t / t.sum(axis=1, keepdims=True)).max() > 0.5 and
-                        self.transition_matrix[:, :, self.phaseable[idx_b_p - 1]].max() == 0.5):
+                if (not np.allclose(t / t.sum(axis=1, keepdims=True), 0.5) and
+                        np.allclose(self.transition_matrix[:, :, self.phaseable[idx_b_p - 1]], 0.5)):
                     self.transition_matrix[:, :, idx_a] = t
                     new_unphaseable.extend(c_unphaseable)
                     connected += 1
@@ -1484,16 +1508,16 @@ class LongHap:
                 # t3 --> idx_a - 1 to idx_a + 1
                 # new_t1 and new_t2 are uninformative but t3 is informative --> use t3 to connect idx_a - 1 and idx_a + 1
                 # and mark idx_a as uninphaseable
-                if ((np.all(new_t1) == 0.5 or np.all(new_t2) == 0.5 or
+                if ((np.allclose(new_t1, 0.5) or np.allclose(new_t2, 0.5) or
                      (np.unique(new_t1.argmax(axis=1)).shape[0] == 1 and new_t1.max(axis=1).min() > 0) or
                      (np.unique(new_t2.argmax(axis=1)).shape[0] == 1 and new_t2.max(axis=1).min() > 0) or
                      new_t2[new_t1[0, :].argmax(), :].argmax() != t3.argmax()) and
-                        t3.max() > 0.5):
+                        not np.allclose(t3, 0.5)):
                     self.transition_matrix[:, :, self.phaseable[idx_a_p - 1]] = t3
                     new_unphaseable.append(idx_a)
                     connected += 1
                 # new t1 and t2 are informative and in agreement with t3 --> use new t1 and new t2 to connect
-                elif (new_t1.max() > 0.5 and new_t2.max() > 0.5 and
+                elif (not np.allclose(new_t1, 0.5) and not np.allclose(new_t2, 0.5) and
                       new_t2[new_t1[0, :].argmax(), :].argmax() == t3.argmax()):
                     self.transition_matrix[:, :, self.phaseable[idx_a_p - 1]] = new_t1
                     self.transition_matrix[:, :, idx_a] = new_t2
@@ -1508,15 +1532,15 @@ class LongHap:
                     new_t1 = self.mirror_transition(new_t1, normalized=True)
                     new_t2 = self.mirror_transition(new_t2, normalized=True)
 
-                    if ((np.all(new_t1) == 0.5 or np.all(new_t2) == 0.5 or
+                    if ((np.allclose(new_t1, 0.5) or np.allclose(new_t2, 0.5) or
                          (np.unique(new_t1.argmax(axis=1)).shape[0] == 1 and new_t1.max(axis=1).min() > 0) or
                          (np.unique(new_t2.argmax(axis=1)).shape[0] == 1 and new_t2.max(axis=1).min() > 0) or
                          new_t2[new_t1[0, :].argmax(), :].argmax() != t3.argmax()) and
-                            t3.max() > 0.5):
+                            not np.allclose(t3, 0.5)):
                         self.transition_matrix[:, :, idx_a] = t3
                         new_unphaseable.append(self.phaseable[idx_a_p + 1])
                         connected += 1
-                    elif (new_t1.max() > 0.5 and new_t2.max() > 0.5 and
+                    elif (not np.allclose(new_t1, 0.5) and not np.allclose(new_t2, 0.5) and
                           new_t2[new_t1[0, :].argmax(), :].argmax() == t3.argmax()):
 
                         self.transition_matrix[:, :, idx_a] = new_t1
@@ -1530,27 +1554,27 @@ class LongHap:
         logging.info(f'Connected {connected}/{n_blocks} phase blocks, leaving {len(new_unphaseable)} '
                      f'variants unphased.')
 
-    @staticmethod
-    def is_homopolymer(seq, k=4):
-        """
-        Check if a sequence is a homopolymer of length k or longer
-        :param seq: str, sequence
-        :param k: int, minimum homopolymer length
-        :return: boolean, True if homopolymer of length k or longer
-        """
-        if len(seq) < k:
-            return False
-        count = 1
-        prev_base = seq[0]
-        for base in seq[1:]:
-            if base == prev_base:
-                count += 1
-                if count >= k:
-                    return True
-            else:
-                count = 1
-                prev_base = base
-        return False
+    # @staticmethod
+    # def is_homopolymer(seq, k=4):
+    #     """
+    #     Check if a sequence is a homopolymer of length k or longer
+    #     :param seq: str, sequence
+    #     :param k: int, minimum homopolymer length
+    #     :return: boolean, True if homopolymer of length k or longer
+    #     """
+    #     if len(seq) < k:
+    #         return False
+    #     count = 1
+    #     prev_base = seq[0]
+    #     for base in seq[1:]:
+    #         if base == prev_base:
+    #             count += 1
+    #             if count >= k:
+    #                 return True
+    #         else:
+    #             count = 1
+    #             prev_base = base
+    #     return False
 
     def create_directed_graph_of_heterozygous_variants_from_reads(self):
         """
@@ -1561,14 +1585,14 @@ class LongHap:
         # iterate over all reads
         if self.seqtech == 'ont':
             strands = np.zeros((2, 2, self.num_variants))
-        variant_homopolymer_mapping = {}
-        for read in tqdm(self.alignments.fetch(self.chrom), total=self.alignments.count(self.chrom)):
-            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or
+        # variant_homopolymer_mapping = {}
+        for read in tqdm(self.alignments.fetch(self.chrom)):
+            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or read.is_supplementary or
                     read.mapping_quality < self.min_mapq):
                 continue
             prev_state = -1
             cigar = deque(read.cigartuples)
-            gap_open, gap_extend, indel_rate, mismatch_rate = self.get_adaptive_gap_penalties(cigar)
+            # gap_open, gap_extend, indel_rate, mismatch_rate = self.get_adaptive_gap_penalties(cigar)
             read_start = read.reference_start
             read_end = read.reference_end
             read_name = read.query_name
@@ -1579,7 +1603,7 @@ class LongHap:
             operation = None
             length = 0
             found_first_var = False
-            query_idx_vars = {}
+            # query_idx_vars = {}
             if min_var_idx > 0 and read_start < self.idx_variant_mapping[min_var_idx - 1]["POS"] - 1 and not warned:
                 warned = True
                 logging.warning('BAM is not sorted by position. Suppressing future warnings.')
@@ -1597,9 +1621,9 @@ class LongHap:
                 if not found_first_var:
                     found_first_var = True
                     min_var_idx = i
-                if i not in variant_homopolymer_mapping:
-                    variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
-                                                                         k=4)
+                # if i not in variant_homopolymer_mapping:
+                #     variant_homopolymer_mapping[i] = self.is_homopolymer(self.reference[pos - 5: pos + 5].seq.upper(),
+                #                                                          k=4)
                 state, q_idx, r_idx, operation, length = self.get_state_at_variant(read_sequence,
                                                                                    read_base_qualities, cigar,
                                                                                    read_start, r_idx,
@@ -1616,28 +1640,42 @@ class LongHap:
 
                 self.read_states[read_name][str(i)] = state
                 self.variant_read_mapping[str(i)].append(read_name)
-                query_idx_vars[str(i)] = q_idx
+                # query_idx_vars[str(i)] = q_idx
                 prev_state = state
 
-            # realign uncertain variants
+            # # realign uncertain variants
             idx_to_realign = [int(n) for n, s in self.read_states[read_name].items() if s is None]
-            for n in sorted(idx_to_realign):
-                state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
-                                                    query_idx_vars[str(n)], gap_open, gap_extend, variant_homopolymer_mapping[n])
-                self.read_states[read_name][str(n)] = state
-                if state != -1:
-                    if self.seqtech == 'ont' and read.is_forward:
-                        strands[state, 0, n] += 1
-                    elif self.seqtech == 'ont' and not read.is_forward:
-                        strands[state, 1, n] += 1
+            for n in idx_to_realign:
+                self.read_states[read_name][str(n)] = -1
 
-                    self.allele_coverage[state, n] += 1
-
-                    if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
-                        self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
+            # for n in sorted(idx_to_realign):
+            #     state = self.realign_around_variant(read_sequence, self.idx_variant_mapping[n],
+            #                                         query_idx_vars[str(n)], gap_open, gap_extend, variant_homopolymer_mapping[n])
+            #     self.read_states[read_name][str(n)] = state
+            #     if state != -1:
+            #         if self.seqtech == 'ont' and read.is_forward:
+            #             strands[state, 0, n] += 1
+            #         elif self.seqtech == 'ont' and not read.is_forward:
+            #             strands[state, 1, n] += 1
+            #
+            #         self.allele_coverage[state, n] += 1
+            #
+            #         # if str(n - 1) in self.read_states[read_name] and self.read_states[read_name][str(n - 1)] != -1:
+            #         #     self.transition_matrix[self.read_states[read_name][str(n - 1)], state, n - 1] += 1
+            #         prev_state = self.read_states[read_name].get(str(n - 1))
+            #         if prev_state is not None and prev_state != -1 and str(n - 1) in query_idx_vars:
+            #             self.transition_matrix[prev_state, state, n - 1] += 1
+            #
+            #         if n + 1 not in idx_to_realign:
+            #             next_state = self.read_states[read_name].get(str(n + 1))
+            #             if next_state is not None and next_state != -1 and str(n + 1) in query_idx_vars:
+            #                 self.transition_matrix[state, next_state, n] += 1
         if self.seqtech == 'ont':
-            strands /= strands.sum(axis=1, keepdims=True)
-            self.unphaseable = np.unique(np.sort(np.where(strands == 0)[2]))
+            depth = strands.sum(axis=1)  # (2, n_variants)
+            one_sided = (strands == 0).any(axis=(0, 1)) & (depth.min(axis=0) > 0)
+            uncovered = depth.min(axis=0) == 0
+            self.unphaseable = np.union1d(self.unphaseable,
+                                          np.where(one_sided | uncovered)[0])
             self.phaseable = self.phaseable[~np.isin(self.phaseable, self.unphaseable)]
             logging.info(f'Marked {self.unphaseable.shape[0]} variants as not phaseable '
                          f'as they are likely false positive calls only found on one strand')
@@ -1687,35 +1725,37 @@ class LongHap:
         delta[:, 0] = np.log([0.5, 0.5])
         phi[:, 0] = [0, 1]
         transition_matrix = np.log(np.where(transition_matrix == 0, 1e-20, transition_matrix))
-        for l in range(1, delta.shape[1]):
-            if (transition_matrix[0, 0, l - 1] == transition_matrix[0, 1, l - 1] and
-                    transition_matrix[1, 0, l - 1] == transition_matrix[1, 1, l - 1]):
+        l = 0
+        if delta.shape[1] > 1:
+            for l in range(1, delta.shape[1]):
+                if (transition_matrix[0, 0, l - 1] == transition_matrix[0, 1, l - 1] and
+                        transition_matrix[1, 0, l - 1] == transition_matrix[1, 1, l - 1]):
 
-                if start_prev_block == l - 1:
-                    start_prev_block = l
-                else:
-                    # backtrace current block
-                    hap = self.backtrace(delta, hap, phi, l - 1, start_prev_block)
-                    start_prev_block = l
-                    self.block_ends.append(self.phaseable[l - 1])
+                    if start_prev_block == l - 1:
+                        start_prev_block = l
+                    else:
+                        # backtrace current block
+                        hap = self.backtrace(delta, hap, phi, l - 1, start_prev_block)
+                        start_prev_block = l
+                        self.block_ends.append(self.phaseable[l - 1])
 
-                # initialize new block
-                delta[:, l] = np.log([0.5, 0.5])
-                phi[:, l] = [0, 1]
-                continue
+                    # initialize new block
+                    delta[:, l] = np.log([0.5, 0.5])
+                    phi[:, l] = [0, 1]
+                    continue
 
-            # calculate path probabilities
-            delta[0, l] = np.max(delta[:, l - 1] + transition_matrix[0, :, l - 1])
-            delta[1, l] = np.max(delta[:, l - 1] + transition_matrix[1, :, l - 1])
+                # calculate path probabilities
+                delta[0, l] = np.max(delta[:, l - 1] + transition_matrix[0, :, l - 1])
+                delta[1, l] = np.max(delta[:, l - 1] + transition_matrix[1, :, l - 1])
 
-            # record pointer
-            phi[0, l] = np.argmax(delta[:, l - 1] + transition_matrix[0, :, l - 1])
-            phi[1, l] = np.argmax(delta[:, l - 1] + transition_matrix[1, :, l - 1])
+                # record pointer
+                phi[0, l] = np.argmax(delta[:, l - 1] + transition_matrix[0, :, l - 1])
+                phi[1, l] = np.argmax(delta[:, l - 1] + transition_matrix[1, :, l - 1])
 
         # backtrace last block
-        hap = self.backtrace(delta, hap, phi, l, start_prev_block)
-        # hap = np.argmax(delta, axis=0)
-        self.block_ends.append(self.phaseable[l])
+        if start_prev_block < l:
+            hap = self.backtrace(delta, hap, phi, l, start_prev_block)
+            self.block_ends.append(self.phaseable[l])
         hap_0 = hap.copy()
         hap_1 = np.where(hap_0 == 0, 1, 0)
         hap_1 = np.where(hap_0 == -1, -1, hap_1)
@@ -1737,16 +1777,17 @@ class LongHap:
         # initialize phased VCF
         vcf_phased = Writer(self.output_vcf, vcf, 'wz')
         v_idx = 0
-        block_id = 0
+        block_id = None
         block_ends = deque(self.block_ends)
-        block_end = block_ends.popleft()
+        block_end = block_ends.popleft() if block_ends else -1
         for v in vcf(self.chrom):
 
             if (v.gt_types != 1 or not (v.is_snp or (v.is_indel and not self.snvs_only)) or
                     (len(v.ALT) > 1 and not self.multiallelics) or  # include multiallelics only if specified
                     v.genotypes[0][0] == -1 or
                     v.genotypes[0][1] == -1 or
-                    np.max([len(v.REF), max([len(a) for a in v.ALT])]) > self.max_allele_length):
+                    np.max([len(v.REF), max([len(a) for a in v.ALT])]) > self.max_allele_length or
+                    (has_allele_level_info and "_" in v.ID)):
                 gt = v.genotypes[0][:2]
                 gt.append(False)
                 v.genotypes = [gt]
@@ -1762,9 +1803,11 @@ class LongHap:
                 else:
                     # increment phase set ID
                     if v_idx > block_end:
-                        block_id += 1
-                        block_end = block_ends.popleft()
+                        block_id = v.POS
+                        block_end = block_ends.popleft() if block_ends else v_idx
                     # assign phase set
+                    if block_id is None:
+                        block_id = v.POS
                     v.set_format("PS", np.array([block_id]))
                     gt = [self.idx_variant_mapping[v_idx]['gt'][i] for i in self.haplotypes[:, v_idx]]
                     gt.append(True)
@@ -1778,13 +1821,17 @@ class LongHap:
         """
         start = 0
         haplotype_blocks = open(self.output_blocks, 'w')
-        while np.all(self.transition_matrix[:, :, start] == 0.5):
+        n = self.transition_matrix.shape[-1]
+        while start < n and np.allclose(self.transition_matrix[:, :, start], 0.5):
             start += 1
+        if start >= n:
+            haplotype_blocks.close()
+            return
         for end in self.block_ends:
             haplotype_blocks.write(f'{self.chrom}\t{self.idx_variant_mapping[start]["POS"]}\t'
                                    f'{self.idx_variant_mapping[end]["POS"]}\n')
             start = end + 1
-            while start < self.transition_matrix.shape[-1] and np.all(self.transition_matrix[:, :, start] == 0.5):
+            while start < self.transition_matrix.shape[-1] and np.allclose(self.transition_matrix[:, :, start], 0.5):
                 start += 1
 
         haplotype_blocks.close()
@@ -1798,6 +1845,8 @@ class LongHap:
         """
         # get indices of read in list
         read_idx = [i for i, r in enumerate(self.methylation_read_assignments[meth_hap]) if r[0] == read_name]
+        if len(read_idx) == 0:
+            return None, None
         # get variant indices
         idx = np.array([self.methylation_read_assignments[meth_hap][r_idx][i][0] for i in range(1, 3) for r_idx in read_idx[:1]])
         # get haplotype states
@@ -1816,7 +1865,8 @@ class LongHap:
         """
         # TODO add PG entry
         bam = pysam.AlignmentFile(self.output_bam, "wb", template=self.alignments)
-        read_assignments = open(self.output_read_assignments, 'w')
+        read_assignments = (open(self.output_read_assignments, 'w')
+                            if self.output_read_assignments else io.StringIO())
         reads_0 = []
         reads_1 = []
         hp1 = 0
@@ -1847,7 +1897,7 @@ class LongHap:
                     prob_1 = (prob_read(1) + prob_haplotype(1)).sum()
                     # calculate LLR  for coming from either haplotype
                     # log(P(R|H_A) / P(R|H_B)) = log(P(R|H_A)) - log(P(R|H_B))
-                    if prob_0 - prob_1 >= self.llr_thresh:
+                    if prob_0 - prob_1 > self.llr_thresh:
                         reads_0.append(read_name)
                         read.set_tag("HP", 1)
                         if np.max(idx) > np.max(self.block_ends):
@@ -1856,7 +1906,7 @@ class LongHap:
                             block = np.where(self.block_ends >= np.max(idx))[0][0]
                         read_assignments.write(f'{read_name}\tH1\t{block}\n')
                         hp1 += 1
-                    elif prob_1 - prob_0 >= self.llr_thresh:
+                    elif prob_1 - prob_0 > self.llr_thresh:
                         reads_1.append(read_name)
                         read.set_tag("HP", 2)
                         if np.max(idx) > np.max(self.block_ends):
@@ -2024,19 +2074,19 @@ def read_phasing(args):
                             datefmt='%Y-%m-%d %H:%M:%S')
     if args.ont and not args.pacbio:
         seqtech = 'ont'
-        flank_snv = 66
-        flank_indel = 200
+        # flank_snv = 66
+        # flank_indel = 200
     elif args.pacbio and not args.ont:
         seqtech = 'pacbio'
-        flank_snv = 33
-        flank_indel = 100
+        # flank_snv = 33
+        # flank_indel = 100
     else:
         raise ValueError('Please specify sequencing technology either with --ont or --pacbio flag. '
                          'Only supporting PacBio or ONT.')
-    if args.flank_snv is not None:
-        flank_snv = args.flank_snv
-    if args.flank_indel is not None:
-        flank_indel = args.flank_indel
+    # if args.flank_snv is not None:
+    #     flank_snv = args.flank_snv
+    # if args.flank_indel is not None:
+    #     flank_indel = args.flank_indel
     longhap = LongHap(vcf_f=args.vcf, bam=args.bam, chrom=args.chrom, reference_path=args.reference,
                       output_vcf=args.output_vcf, output_read_states=args.output_read_states,
                       output_blocks=args.output_blocks, output_bam=args.output_bam,
@@ -2050,12 +2100,16 @@ def read_phasing(args):
                       snvs_only=args.snvs_only, multiallelics=args.multiallelics,
                       use_all_methylated_sites=args.use_all_methylated_sites, force=args.force,
                       max_allele_length=args.max_allele_length, min_allele_count=args.min_allele_count,
+                      min_allele_count_meth=args.min_allele_count_meth,
                       min_base_quality=args.min_base_quality, seqtech=seqtech, min_mapq=args.min_mapq,
-                      flank_snv=flank_snv, flank_indel=flank_indel,
+                      sample=args.sample, llr_thresh=args.llr_thresh, error_rate=args.error_rate,
+                      max_meth_distance=args.max_meth_distance,
+                      # flank_snv=flank_snv, flank_indel=flank_indel,
                       )
-    longhap.infer_variant_transitions()
-    longhap.infer_methylation_transitions()
-    longhap.phase()
+    if longhap.num_variants > 0:
+        longhap.infer_variant_transitions()
+        longhap.infer_methylation_transitions()
+        longhap.phase()
     longhap.write_results()
 
 
@@ -2069,67 +2123,80 @@ def main(argv=None):
                         required=True)
     parser.add_argument('-c', '--chrom', help='Chromosome', required=True)
     parser.add_argument('-m', '--methylation_calls', help='Methylation calls from pileup model',
-                           required=False, default=None)
+                        required=False, default=None)
     parser.add_argument('--snvs_only', help='Whether to phase SNVs only ["False]',
-                           default=False, action='store_true')
+                        default=False, action='store_true')
     parser.add_argument('--multiallelics', help='Also phase multiallelic variants or not [False]',
-                           default=False, action='store_true')
+                        default=False, action='store_true')
     parser.add_argument('--ont', help='Data is Oxford Nanopore data [False]', default=False, action='store_true')
     parser.add_argument('--pacbio', help='Data is PacBio HiFi data [False]', default=False, action='store_true')
     parser.add_argument('--max_allele_length', default=50000, type=int,
-                           help='Maximum length of alleles to consider for phasing in bp [50000]',)
+                        help='Maximum length of alleles to consider for phasing in bp [50000]',)
     parser.add_argument('--min_allele_count',
-                           help='How many examples of the minor allele must be present in the reads to consider the '
-                                'variant for phasing [1]', type=int, default=1)
+                        help='How many examples of the minor allele must be present in the reads to consider the '
+                             'variant for phasing [1]', type=int, default=1)
+    parser.add_argument('--min_allele_count_meth',
+                        help='How many examples of the minor allele must be present in the reads to consider the '
+                                'variant for methylation phasing [2]', type=int, default=2)
     parser.add_argument('--min_base_quality',
-                           help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. '
-                                'For HiFi data, all bases should be consider, that is a minimum quality of 0. '
-                                'For ONT data, a threshold of 10 is recommended [0]', type=int, default=0)
+                        help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. '
+                             'For HiFi data, all bases should be consider, that is a minimum quality of 0. '
+                             'For ONT data, a threshold of 10 is recommended [0]', type=int, default=0)
     parser.add_argument('--min_mapq', help='Minimum mapping quality to consider a read for phasing [20]',
                         type=int, default=20)
-    parser.add_argument('--flank_snv', help='Number of flanking bp to use for realignment around '
-                                            'uncertain SNVs. Default is 66 for ONT and 33 for PacBio', type=int,
-                        default=None)
-    parser.add_argument('--flank_indel', help='Number of flanking bp to use for realignment around '
-                                              'uncertain indels. Default is 200 for ONT and 100 for PacBio', type=int,
-                        default=None)
+    parser.add_argument('--sample', help='Sample to phase in a multi-sample VCF '
+                                         '[first sample]', default=None)
+    parser.add_argument('--llr_thresh',
+                        help='Log-likelihood ratio threshold for ' 'determining methylation states,'
+                             ' and read haplotagging [3]',
+                        type=float, default=3)
+    parser.add_argument('--error_rate', help='Per-base error rate assumed when '
+                                             'haplotagging reads [1e-3]', type=float, default=1e-3)
+    parser.add_argument('--max_meth_distance', help='Search window around an uncertain '
+                                                    'transition for methylation calls [5000]',
+                        type=int, default=5000)
+    # parser.add_argument('--flank_snv', help='Number of flanking bp to use for realignment around '
+    #                                         'uncertain SNVs. Default is 66 for ONT and 33 for PacBio', type=int,
+    #                     default=None)
+    # parser.add_argument('--flank_indel', help='Number of flanking bp to use for realignment around '
+    #                                           'uncertain indels. Default is 200 for ONT and 100 for PacBio', type=int,
+    #                     default=None)
     parser.add_argument('-o', '--output_vcf', help='Output phased vcf', required=True)
     parser.add_argument('--output_bam', help='Output haplotagged bam')
     parser.add_argument('--output_read_assignments', help='Haplotype assignments for each read')
     parser.add_argument('--output_blocks', help='Haplotype blocks in bed format')
     parser.add_argument('--output_transition_matrix', required=False, default=None,
-                           help='If provided transition matrix will be saved to this file as numpy array (.npz). '
-                                'Allows faster re-runs.')
+                        help='If provided transition matrix will be saved to this file as numpy array (.npz). '
+                             'Allows faster re-runs.')
     parser.add_argument('--output_transition_matrix_meth', required=False, default=None,
-                           help='If provided transition matrix filled in with methylation data will be saved to this '
-                                'file as numpy array (.npz). Allows faster re-runs.')
+                        help='If provided transition matrix filled in with methylation data will be saved to this '
+                             'file as numpy array (.npz). Allows faster re-runs.')
     parser.add_argument('--output_read_states', required=False, default=None,
-                           help='If provided read states will be saved to this file as json. '
-                                'Allows faster re-runs.')
+                        help='If provided read states will be saved to this file as json. '
+                             'Allows faster re-runs.')
     parser.add_argument('--output_variant_read_mapping', required=False, default=None,
-                           help='If provided read names covering a specific variant will be saved to this file as json.'
-                                ' Allows faster re-runs. ')
+                        help='If provided read names covering a specific variant will be saved to this file as json.'
+                             ' Allows faster re-runs. ')
     parser.add_argument('--output_allele_coverage', required=False, default=None,
-                           help='If provided allele coverage will be saved to this file as npy (.npy). '
-                                'Sites with one allele absent from reads bill be ignored. Allows faster re-runs.')
+                        help='If provided allele coverage will be saved to this file as npy (.npy). '
+                             'Sites with one allele absent from reads bill be ignored. Allows faster re-runs.')
     parser.add_argument('--output_unphaseable_variants', required=False, default=None,
-                           help='If provided unphaseable variants will be saved to this file as npz. '
-                                'Allows faster re-runs.')
+                        help='If provided unphaseable variants will be saved to this file as npz. '
+                             'Allows faster re-runs.')
     parser.add_argument('--output_differentially_methylated_sites',
-                           help='Write differentially methylated files used by longhap to infer transitions to file',
-                           required=False, default=None)
+                        help='Write differentially methylated files used by longhap to infer transitions to file',
+                        required=False, default=None)
     parser.add_argument('--use_all_methylated_sites', default=False, action='store_true',
-                           help="Whether to use all methylated sites or not. If False, at most 25,000 methylated sites "
-                                "per transition are used. This guarantees fast runtimes and does not seem to "
-                                "sacrifice accuracy. [False]")
-
+                        help="Whether to use all methylated sites or not. If False, at most 25,000 methylated sites "
+                             "per transition are used. This guarantees fast runtimes and does not seem to "
+                             "sacrifice accuracy. [False]")
     parser.add_argument('--force', action='store_true', default=False,
-                           help='If transition matrix output is provided and file already exists this file will be '
-                                'loaded by default unless --force is set. Then the transition matrix will '
-                                'be re-inferred.')
+                        help='If transition matrix output is provided and file already exists this file will be '
+                             'loaded by default unless --force is set. Then the transition matrix will '
+                             'be re-inferred.')
     parser.add_argument('--log', help='Log file', default='longhap.log')
     parser.add_argument('-v', '--verbose', help='Print logging information to stdout', action='store_true',
-                           default=False)
+                        default=False)
 
     args = parser.parse_args(argv)
     read_phasing(args)
