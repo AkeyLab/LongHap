@@ -1151,7 +1151,7 @@ rule download_gene_annotations:
 
 rule get_exons:
     input:
-        ref_dir + gene_annotations_url.split('/')[-1]
+        ref_dir + gene_annotations_url.split('/')[-1].replace('.gz', '')
     output:
         ref_dir + gene_annotations_url.split('/')[-1].replace('.gff3', '.exons.bed').replace('.gz', '')
     localrule: True
