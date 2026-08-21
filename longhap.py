@@ -786,7 +786,7 @@ class LongHap:
             modified_bases = modified_bases[key]
             mm_tags, ml_tags = zip(*modified_bases)
             mm_tags = np.array(mm_tags) - (0 if read.is_forward else 1)
-            ml_tags = np.array(ml_tags) / 255
+            ml_tags = (np.array(ml_tags) + 0.5) / 255
         else:
             mm_tags = np.array([])
             ml_tags = np.array([])
@@ -842,21 +842,16 @@ class LongHap:
         """
         df_hap = meth_calls.copy()
         c_meth_probs = meth_probs[reads]
-        cov = np.zeros((c_meth_probs.shape[1]))
-        mod = np.zeros((c_meth_probs.shape[1]))
-        var_id, var_cov = np.unique(c_meth_probs.nonzero()[1], return_counts=True)
-        cov[var_id] = var_cov
-        mod_condition_mask = 10 ** c_meth_probs.data > 0.5
-        for i in range(c_meth_probs.shape[1]):
-            # Get the start and end indices in the data array for the current column
-            start_idx = c_meth_probs.indptr[i]
-            end_idx = c_meth_probs.indptr[i + 1]
-            mod[i] = np.sum(mod_condition_mask[start_idx:end_idx])
-
+        n_sites = c_meth_probs.shape[1]
+        per_site = np.diff(c_meth_probs.indptr)
+        cov = per_site.astype(float)
+        site_of_entry = np.repeat(np.arange(n_sites), per_site)
+        modified = 10 ** c_meth_probs.data > 0.5
+        mod = np.bincount(site_of_entry[modified], minlength=n_sites).astype(float)
         df_hap['hap'] = hap
         df_hap['mod_count'] = mod
         df_hap['unmod_count'] = cov - mod
-        ratio = np.full_like(mod, np.nan, dtype=float)
+        ratio = np.full(n_sites, np.nan, dtype=float)
         np.divide(mod, cov, out=ratio, where=(cov > 0))
         df_hap['ratio'] = ratio * 100
         df_hap['coverage'] = cov
