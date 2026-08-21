@@ -41,9 +41,13 @@ jobs:
 
       - name: Test pip install from built wheel
         run: |
-          pip install dist/*.whl
+          wheel=$(ls dist/*.whl)
+          pip install "$wheel[test]"   # [test] adds pytest
           longhap --help
           longhap --version
+
+      - name: Run the test suite
+        run: pytest -q
 
       - name: Test pip install - sequence-only phasing
         run: |

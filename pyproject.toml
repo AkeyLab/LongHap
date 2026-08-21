@@ -39,6 +39,11 @@ dependencies = [
     "tqdm>=4.67.1",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/AkeyLab/LongHap"
 Repository = "https://github.com/AkeyLab/LongHap"
