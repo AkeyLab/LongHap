@@ -786,7 +786,7 @@ class LongHap:
             modified_bases = modified_bases[key]
             mm_tags, ml_tags = zip(*modified_bases)
             mm_tags = np.array(mm_tags) - (0 if read.is_forward else 1)
-            ml_tags = (np.array(ml_tags) + 0.5) / 255
+            ml_tags = (np.array(ml_tags) + 0.5) / 256
         else:
             mm_tags = np.array([])
             ml_tags = np.array([])
