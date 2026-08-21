@@ -31,6 +31,8 @@ class LongHap:
                  use_all_methylated_sites=False, max_meth_distance=5000, error_rate=1e-3, llr_thresh=3,
                  sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
                  min_base_quality=0, min_mapq=20,
+                 use_supplementary=False, supplementary_distance=100000,
+                 min_meth_difference=0.0,
                  # flank_snv=33, flank_indel=100,
                  seqtech='pacbio'):
         self.chrom = chrom
@@ -62,6 +64,9 @@ class LongHap:
         self.min_allele_count_meth = min_allele_count_meth
         self.min_base_quality = min_base_quality
         self.min_mapq = min_mapq
+        self.use_supplementary = use_supplementary
+        self.supplementary_distance = supplementary_distance
+        self.min_meth_difference = min_meth_difference
         # self.flank_snv = flank_snv
         # self.flank_indel = flank_indel
         self.seqtech = seqtech
@@ -104,6 +109,9 @@ class LongHap:
         self.prev_state = dict()
         self.read_states = defaultdict(dict)
         self.variant_read_mapping = defaultdict(list)
+        # reference intervals each read contributed states from; a read split by
+        # the aligner has one entry per alignment segment
+        self.read_segments = defaultdict(list)
 
         self.methylation_calls = pd.DataFrame(columns=['chrom', 'start', 'end', 'score', 'hap', 'coverage', 'mod_count',
                                                        'unmod_count', 'ratio'])
@@ -786,7 +794,7 @@ class LongHap:
             modified_bases = modified_bases[key]
             mm_tags, ml_tags = zip(*modified_bases)
             mm_tags = np.array(mm_tags) - (0 if read.is_forward else 1)
-            ml_tags = np.array(ml_tags) / 255
+            ml_tags = (np.array(ml_tags) + 0.5) / 256
         else:
             mm_tags = np.array([])
             ml_tags = np.array([])
@@ -842,21 +850,16 @@ class LongHap:
         """
         df_hap = meth_calls.copy()
         c_meth_probs = meth_probs[reads]
-        cov = np.zeros((c_meth_probs.shape[1]))
-        mod = np.zeros((c_meth_probs.shape[1]))
-        var_id, var_cov = np.unique(c_meth_probs.nonzero()[1], return_counts=True)
-        cov[var_id] = var_cov
-        mod_condition_mask = 10 ** c_meth_probs.data > 0.5
-        for i in range(c_meth_probs.shape[1]):
-            # Get the start and end indices in the data array for the current column
-            start_idx = c_meth_probs.indptr[i]
-            end_idx = c_meth_probs.indptr[i + 1]
-            mod[i] = np.sum(mod_condition_mask[start_idx:end_idx])
-
+        n_sites = c_meth_probs.shape[1]
+        per_site = np.diff(c_meth_probs.indptr)
+        cov = per_site.astype(float)
+        site_of_entry = np.repeat(np.arange(n_sites), per_site)
+        modified = 10 ** c_meth_probs.data > 0.5
+        mod = np.bincount(site_of_entry[modified], minlength=n_sites).astype(float)
         df_hap['hap'] = hap
         df_hap['mod_count'] = mod
         df_hap['unmod_count'] = cov - mod
-        ratio = np.full_like(mod, np.nan, dtype=float)
+        ratio = np.full(n_sites, np.nan, dtype=float)
         np.divide(mod, cov, out=ratio, where=(cov > 0))
         df_hap['ratio'] = ratio * 100
         df_hap['coverage'] = cov
@@ -1039,10 +1042,25 @@ class LongHap:
             # unmethylated sites must have an LLR < -3
             meth_states_hap2 = np.where(unmeth_hap2 - meth_hap2 > self.llr_thresh, 0, meth_states_hap2)
 
+            # How far apart the two haplotypes actually are, per read.  The LLRs
+            # above are sums, so they grow with depth: at 14x a haplotype clears
+            # llr_thresh from a methylated fraction of about 0.58, at 30x from
+            # 0.54, which lets a site through where the two haplotypes barely
+            # differ.  Dividing by the number of reads carrying a call turns the
+            # sum into an effect size that does not move with coverage, and the
+            # difference between the two is how differently they vote.  Each read
+            # is weighted by its own confidence, unlike a count of reads over 0.5.
+            n_hap1 = np.diff(methylation_probs[reads_hap1].indptr)
+            n_hap2 = np.diff(methylation_probs[reads_hap2].indptr)
+            llr_per_read_hap1 = (meth_hap1 - unmeth_hap1) / np.maximum(n_hap1, 1)
+            llr_per_read_hap2 = (meth_hap2 - unmeth_hap2) / np.maximum(n_hap2, 1)
+            meth_difference = np.abs(llr_per_read_hap1 - llr_per_read_hap2)
+
             # find differentially methylated sites
             diff_meth = np.where((meth_states_hap1 != meth_states_hap2) & # hap1 and hap2 must have different state
                                  (meth_states_hap1 >= 0) &  # hap1 must be defined
-                                 (meth_states_hap2 >= 0))[0]  # hap1 must be defined
+                                 (meth_states_hap2 >= 0) &  # hap2 must be defined
+                                 (meth_difference > self.min_meth_difference))[0]
 
 
 
@@ -1082,10 +1100,20 @@ class LongHap:
         # calculate most common variant states at sites flanking uncertain transition
         read_variant_states = np.where(read_variant_states == -1, np.nan, read_variant_states)
         read_variant_cov = np.where(np.isnan(read_variant_states), np.nan, 1)
-        hap1 = np.nanmean(read_variant_states[reads_hap1], axis=0)
-        hap2 = np.nanmean(read_variant_states[reads_hap2], axis=0)
         hap1_cov = np.nansum(read_variant_cov[reads_hap1], axis=0)
         hap2_cov = np.nansum(read_variant_cov[reads_hap2], axis=0)
+        # Mean state over the reads that cover each site. np.nanmean warns "Mean of
+        # empty slice" wherever no assigned read covers a site, and whenever a
+        # haplotype matched no read at all -- both routine here, since these are the
+        # sites the variant data could not resolve. Dividing by the coverage already
+        # counted above gives the same values without the warning, and the NaN it
+        # leaves behind is the intended answer: it is filled in from the other
+        # haplotype immediately below.
+        n_sites = read_variant_states.shape[1]
+        hap1 = np.divide(np.nansum(read_variant_states[reads_hap1], axis=0), hap1_cov,
+                         out=np.full(n_sites, np.nan), where=hap1_cov > 0)
+        hap2 = np.divide(np.nansum(read_variant_states[reads_hap2], axis=0), hap2_cov,
+                         out=np.full(n_sites, np.nan), where=hap2_cov > 0)
 
         # complement missing states
         hap1 = np.where(np.isnan(hap1) & (hap2 == 1), 0, hap1)
@@ -1576,6 +1604,48 @@ class LongHap:
     #             prev_base = base
     #     return False
 
+    def accumulate_transitions_from_read_states(self):
+        """
+        Count, for every read, the transitions between the variants it resolves
+
+        Doing this after the scan rather than inside it is what lets a read that
+        the aligner split contribute the transition *across* the split: the two
+        segments are walked separately, so a counter carried along one alignment
+        is back to -1 by the time the next one starts, and the one transition
+        that could bridge the gap is the one that gets lost. Reading it back off
+        ``self.read_states`` instead sees the read whole.
+
+        Only consecutive variant indices count, so this reproduces the per
+        alignment behaviour exactly for a read that was never split. Two indices
+        resolved by *different* segments are linked only if they lie within
+        ``supplementary_distance`` of each other, 0 meaning no limit.
+        """
+        for read_name, states in self.read_states.items():
+            resolved = sorted((int(i) for i, state in states.items()
+                               if state is not None and state != -1))
+            segments = self.read_segments.get(read_name, ())
+            for a, b in zip(resolved, resolved[1:]):
+                if b != a + 1:
+                    continue
+                if not self.same_segment(segments, a, b) and self.supplementary_distance:
+                    pos_a = self.idx_variant_mapping[a]["POS"]
+                    pos_b = self.idx_variant_mapping[b]["POS"]
+                    if pos_b - pos_a > self.supplementary_distance:
+                        continue
+                self.transition_matrix[states[str(a)], states[str(b)], a] += 1
+
+    def same_segment(self, segments, idx_a, idx_b):
+        """
+        Whether one alignment segment of a read covers both variants
+        :param segments: list, (start, end) reference intervals of the read's alignments
+        :param idx_a: int, index of the first heterozygous variant
+        :param idx_b: int, index of the second heterozygous variant
+        :return: boolean, True when a single segment spans both
+        """
+        pos_a = self.idx_variant_mapping[idx_a]["POS"] - 1
+        pos_b = self.idx_variant_mapping[idx_b]["POS"] - 1
+        return any(start <= pos_a < end and start <= pos_b < end for start, end in segments)
+
     def create_directed_graph_of_heterozygous_variants_from_reads(self):
         """
         Create phase transition matrix based on overlap in heterozygous variants
@@ -1587,8 +1657,13 @@ class LongHap:
             strands = np.zeros((2, 2, self.num_variants))
         # variant_homopolymer_mapping = {}
         for read in tqdm(self.alignments.fetch(self.chrom)):
-            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or read.is_supplementary or
+            if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or
                     read.mapping_quality < self.min_mapq):
+                continue
+            # The aligner splits a long read into a primary plus one or more
+            # supplementary alignments; taking only the primary throws away the
+            # part of the read that reaches across a variant desert.
+            if read.is_supplementary and not self.use_supplementary:
                 continue
             prev_state = -1
             cigar = deque(read.cigartuples)
@@ -1628,20 +1703,34 @@ class LongHap:
                                                                                    read_base_qualities, cigar,
                                                                                    read_start, r_idx,
                                                                                    q_idx, operation, length, var)
-                # fill transition matrix
+                # Two segments of one read can cover the same variant. Whichever
+                # allele they agree on counts once; a disagreement means the read
+                # cannot speak for that site at all and falls back to -1.
+                seen = str(i) in self.read_states[read_name]
+                previous = self.read_states[read_name].get(str(i))
+                if seen and previous not in (None, -1):
+                    if state not in (None, -1) and state != previous:
+                        self.read_states[read_name][str(i)] = -1
+                        self.allele_coverage[previous, i] -= 1
+                        if self.seqtech == 'ont':
+                            strands[previous, 0 if read.is_forward else 1, i] -= 1
+                    prev_state = self.read_states[read_name][str(i)]
+                    continue
+
                 if state != -1 and state is not None:
                     self.allele_coverage[state, i] += 1
                     if self.seqtech == 'ont' and read.is_forward:
                         strands[state, 0, i] += 1
                     elif self.seqtech == 'ont' and not read.is_forward:
                         strands[state, 1, i] += 1
-                    if prev_state != -1 and prev_state is not None:
-                        self.transition_matrix[prev_state, state, i - 1] += 1
 
                 self.read_states[read_name][str(i)] = state
-                self.variant_read_mapping[str(i)].append(read_name)
+                if not seen:
+                    self.variant_read_mapping[str(i)].append(read_name)
                 # query_idx_vars[str(i)] = q_idx
                 prev_state = state
+
+            self.read_segments[read_name].append((read_start, read_end))
 
             # # realign uncertain variants
             idx_to_realign = [int(n) for n, s in self.read_states[read_name].items() if s is None]
@@ -1670,6 +1759,8 @@ class LongHap:
             #             next_state = self.read_states[read_name].get(str(n + 1))
             #             if next_state is not None and next_state != -1 and str(n + 1) in query_idx_vars:
             #                 self.transition_matrix[state, next_state, n] += 1
+        self.accumulate_transitions_from_read_states()
+
         if self.seqtech == 'ont':
             depth = strands.sum(axis=1)  # (2, n_variants)
             one_sided = (strands == 0).any(axis=(0, 1)) & (depth.min(axis=0) > 0)
@@ -2102,6 +2193,9 @@ def read_phasing(args):
                       max_allele_length=args.max_allele_length, min_allele_count=args.min_allele_count,
                       min_allele_count_meth=args.min_allele_count_meth,
                       min_base_quality=args.min_base_quality, seqtech=seqtech, min_mapq=args.min_mapq,
+                      use_supplementary=args.use_supplementary,
+                      supplementary_distance=args.supplementary_distance,
+                      min_meth_difference=args.min_meth_difference,
                       sample=args.sample, llr_thresh=args.llr_thresh, error_rate=args.error_rate,
                       max_meth_distance=args.max_meth_distance,
                       # flank_snv=flank_snv, flank_indel=flank_indel,
@@ -2144,6 +2238,18 @@ def main(argv=None):
                              'For ONT data, a threshold of 10 is recommended [0]', type=int, default=0)
     parser.add_argument('--min_mapq', help='Minimum mapping quality to consider a read for phasing [20]',
                         type=int, default=20)
+    parser.add_argument('--use_supplementary', action='store_true', default=False,
+                        help='Also use supplementary alignments [ignore them]')
+    parser.add_argument('--supplementary_distance', type=int, default=100000, metavar='DIST',
+                        help='With --use_supplementary, do not link two variants resolved by '
+                             'different alignments of one read more than DIST bp apart. '
+                             '0 removes the limit [100000]')
+    parser.add_argument('--min_meth_difference', type=float, default=0.0, metavar='D',
+                        help='Minimum difference between the haplotypes in mean per-read '
+                             'methylation log-likelihood ratio for a site to count as '
+                             'differentially methylated. Confidence weighted and independent '
+                             'of read depth; D of 1.0 is roughly a 39 percentage point '
+                             'difference in methylated fraction. 0 disables [0]')
     parser.add_argument('--sample', help='Sample to phase in a multi-sample VCF '
                                          '[first sample]', default=None)
     parser.add_argument('--llr_thresh',
