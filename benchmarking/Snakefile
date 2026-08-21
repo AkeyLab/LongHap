@@ -730,8 +730,11 @@ rule run_whatshap_phase:
     resources:
         runtime=30,
         mem_mb=16*1024
+    params:
+        cmd_opt = lambda wildcards: "--use-supplementary --supplementary-distance 1000000" if 'ul_ont' in wildcards.seq_tech else ""
     shell:
-        "whatshap phase --only-snvs --ignore-read-groups -o {output.vcf} --reference={input.ref} {input.vcf} {input.bam}"
+        "whatshap phase {params.cmd_opt} --only-snvs --ignore-read-groups -o {output.vcf} --reference={input.ref} "
+        "{input.vcf} {input.bam}"
 
 rule run_whatshap_phase_indels:
     input:
@@ -747,12 +750,14 @@ rule run_whatshap_phase_indels:
         chrom="|".join(autosomes),
         aligner=aligner,
         seq_tech="|".join(seq_tech)
+    params:
+        cmd_opt= lambda wildcards: "--use-supplementary --supplementary-distance 1000000" if 'ul_ont' in wildcards.seq_tech else ""
     benchmark: base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap.benchmark"
     resources:
         runtime=30,
         mem_mb=16 * 1024
     shell:
-        "whatshap phase --ignore-read-groups -o {output.vcf} --reference={input.ref} {input.vcf} {input.bam}"
+        "whatshap phase {params.cmd_opt} --ignore-read-groups -o {output.vcf} --reference={input.ref} {input.vcf} {input.bam}"
 
 def get_seqtech_longphase(wildcards):
     if 'ont' in wildcards.seq_tech:
