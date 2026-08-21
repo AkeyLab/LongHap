@@ -1077,10 +1077,20 @@ class LongHap:
         # calculate most common variant states at sites flanking uncertain transition
         read_variant_states = np.where(read_variant_states == -1, np.nan, read_variant_states)
         read_variant_cov = np.where(np.isnan(read_variant_states), np.nan, 1)
-        hap1 = np.nanmean(read_variant_states[reads_hap1], axis=0)
-        hap2 = np.nanmean(read_variant_states[reads_hap2], axis=0)
         hap1_cov = np.nansum(read_variant_cov[reads_hap1], axis=0)
         hap2_cov = np.nansum(read_variant_cov[reads_hap2], axis=0)
+        # Mean state over the reads that cover each site. np.nanmean warns "Mean of
+        # empty slice" wherever no assigned read covers a site, and whenever a
+        # haplotype matched no read at all -- both routine here, since these are the
+        # sites the variant data could not resolve. Dividing by the coverage already
+        # counted above gives the same values without the warning, and the NaN it
+        # leaves behind is the intended answer: it is filled in from the other
+        # haplotype immediately below.
+        n_sites = read_variant_states.shape[1]
+        hap1 = np.divide(np.nansum(read_variant_states[reads_hap1], axis=0), hap1_cov,
+                         out=np.full(n_sites, np.nan), where=hap1_cov > 0)
+        hap2 = np.divide(np.nansum(read_variant_states[reads_hap2], axis=0), hap2_cov,
+                         out=np.full(n_sites, np.nan), where=hap2_cov > 0)
 
         # complement missing states
         hap1 = np.where(np.isnan(hap1) & (hap2 == 1), 0, hap1)
