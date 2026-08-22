@@ -1161,7 +1161,7 @@ rule get_exons:
         "for (i=1; i<=n; i++) if (a[i] ~ /^gene_name=/) {{ name=substr(a[i], 11); break }} "
         "print $1, $4-1, $5, name}}' {input} | sort -k1,1 -k2,2n > {output}"
 
-rule evaluate_phasing_custom:
+rule eval_ph_cm:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
@@ -1187,7 +1187,7 @@ rule evaluate_phasing_custom:
         "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} {params.options}"
 
-rule evaluate_phasing_custom_longhap_meth:
+rule eval_ph_cm_lh:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
@@ -1215,7 +1215,7 @@ rule evaluate_phasing_custom_longhap_meth:
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
         "--baseline_vcf <(bcftools norm -m -any {input.baseline}) {params.options}"
 
-rule evaluate_phasing_custom_methphaser:
+rule eval_ph_cm_mp:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
@@ -1244,7 +1244,7 @@ rule evaluate_phasing_custom_methphaser:
         "--baseline_vcf <(bcftools norm -m -any {input.baseline}) {params.options}"
 
 
-rule evaluate_phasing_custom_shared_sites:
+rule eval_ph_cm_sh:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
@@ -1271,7 +1271,7 @@ rule evaluate_phasing_custom_shared_sites:
         "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} {params.options}"
 
-rule evaluate_phasing_custom_longhap_meth_shared:
+rule eval_ph_cm_lh_sh:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
@@ -1301,7 +1301,7 @@ rule evaluate_phasing_custom_longhap_meth_shared:
         "--baseline_vcf <(bcftools norm -m -any {input.baseline} | bcftools view -T <(sort -k2n {input.shared_sites})) "
         "{params.options}"
 
-rule evaluate_phasing_custom_methphaser_shared:
+rule eval_ph_cm_mp_sh:
     input:
         vcf = base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz",
         gt=ref_dir + gt_variants_url.split('/')[-1],
