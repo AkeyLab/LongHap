@@ -389,11 +389,11 @@ rule run_whatshap_compare_rare_complex:
 
 rule eval_ph_cm_lh_sh:
     input:
-        vcf = longhap_vcf.replace('.vcf.gz', '.annotated.rare.vcf.gz'),
+        vcf = longhap_vcf.replace('.vcf.gz', '.annotated.vcf.gz'),
         gt=base_dir + "{sample}/dipcall/asm.dip.vcf.gz",
         tbi=base_dir + "{sample}/dipcall/asm.dip.vcf.gz.tbi",
         exons =exons,
-        baseline=longhap_vcf.replace('.vcf.gz', '.annotated.rare.vcf.gz').format(tool='longhap'),
+        baseline=longhap_vcf.replace('.vcf.gz', '.annotated.vcf.gz').format(tool='longhap'),
         shared_sites=base_dir + "{sample}/longhap/shared_phased_rare_sites_chr{chrom}.tab"
     output:
         summary=longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.custom.tab'),
@@ -405,7 +405,6 @@ rule eval_ph_cm_lh_sh:
     wildcard_constraints:
         aligner=aligner,
         seq_tech="|".join(seq_tech),
-        phasing_method='longhap_meth'
     resources:
         mem_mb=2 * 1024,
         runtime=5
@@ -415,7 +414,7 @@ rule eval_ph_cm_lh_sh:
         "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf} | bcftools view -T <(sort -k2n {input.shared_sites})) "
         "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
-        "'--evaluate_sv --rare_variants {params.options}"
+        "--evaluate_sv --rare_variants {params.options}"
 
 
 def get_switch_errors_omim(wildcards):
