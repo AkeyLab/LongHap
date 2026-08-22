@@ -370,7 +370,7 @@ rule merge_snvs_svs:
         "bcftools norm -m -any | "
         "bcftools norm -d both | "
         "bcftools norm -m+ -f {input.ref} |"
-        "bcftools sort -Oz -o {output.vcf} ; tabix {output.vcf}"
+        "bcftools sort -Oz -o {output.vcf}; tabix {output.vcf}"
 
 
 rule call_methylations:
