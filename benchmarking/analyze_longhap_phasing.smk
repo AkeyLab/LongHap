@@ -394,7 +394,7 @@ rule eval_ph_cm_lh_sh:
         tbi=base_dir + "{sample}/dipcall/asm.dip.vcf.gz.tbi",
         exons =exons,
         baseline=lambda wildcards: longhap_vcf.replace('.vcf.gz', '.annotated.vcf.gz').format(tool='longhap',
-            sample=wildcards.sample, chrom=wildcards.chrom, aligner=wildcards.aligner, seq_tech=wildcards.seq_tech),
+            sample=wildcards.sample, chrom=wildcards.chrom),
         shared_sites=base_dir + "{sample}/longhap/shared_phased_rare_sites_chr{chrom}.tab"
     output:
         summary=longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.custom.tab'),
@@ -403,9 +403,6 @@ rule eval_ph_cm_lh_sh:
     params:
         chrom='chr{chrom}',
         options=lambda wildcards, input: f"--baseline_vcf <(bcftools norm -m -any {input.baseline} | bcftools view -T <(sort -k2n {input.shared_sites}))" if wildcards.tool == 'longhap_meth'  else ''
-    wildcard_constraints:
-        aligner=aligner,
-        seq_tech="|".join(seq_tech),
     resources:
         mem_mb=2 * 1024,
         runtime=5
