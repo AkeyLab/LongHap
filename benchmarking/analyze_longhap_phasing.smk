@@ -394,7 +394,7 @@ rule eval_ph_cm_lh_sh:
         tbi=base_dir + "{sample}/dipcall/asm.dip.vcf.gz.tbi",
         exons =exons,
         baseline=lambda wildcards: longhap_vcf.replace('.vcf.gz', '.annotated.vcf.gz').format(tool='longhap',
-            sample=wildcards.sample, chrom=wildcards.chrom),
+            sample=wildcards.sample, chrom=wildcards.chrom, aligner=wildcards.aligner, seq_tech=wildcards.seq_tech),
         shared_sites=base_dir + "{sample}/longhap/shared_phased_rare_sites_chr{chrom}.tab"
     output:
         summary=longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.custom.tab'),
