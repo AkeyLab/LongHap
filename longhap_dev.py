@@ -1660,9 +1660,6 @@ class LongHap:
             if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_qcfail or
                     read.mapping_quality < self.min_mapq):
                 continue
-            # The aligner splits a long read into a primary plus one or more
-            # supplementary alignments; taking only the primary throws away the
-            # part of the read that reaches across a variant desert.
             if read.is_supplementary and not self.use_supplementary:
                 continue
             prev_state = -1
@@ -1703,9 +1700,8 @@ class LongHap:
                                                                                    read_base_qualities, cigar,
                                                                                    read_start, r_idx,
                                                                                    q_idx, operation, length, var)
-                # Two segments of one read can cover the same variant. Whichever
-                # allele they agree on counts once; a disagreement means the read
-                # cannot speak for that site at all and falls back to -1.
+                # Two supplementary alignments of one read can cover the same variant.
+                # If they agree count once, otherwise disregard
                 seen = str(i) in self.read_states[read_name]
                 previous = self.read_states[read_name].get(str(i))
                 if seen and previous not in (None, -1):
@@ -2247,9 +2243,9 @@ def main(argv=None):
     parser.add_argument('--min_meth_difference', type=float, default=0.0, metavar='D',
                         help='Minimum difference between the haplotypes in mean per-read '
                              'methylation log-likelihood ratio for a site to count as '
-                             'differentially methylated. Confidence weighted and independent '
-                             'of read depth; D of 1.0 is roughly a 39 percentage point '
-                             'difference in methylated fraction. 0 disables [0]')
+                             'differentially methylated. Increasing it reduces the error rate of new connections made '
+                             'but drastically reduces the number of connections made, increasing overall error.'
+                             '0 disables it [0]')
     parser.add_argument('--sample', help='Sample to phase in a multi-sample VCF '
                                          '[first sample]', default=None)
     parser.add_argument('--llr_thresh',
