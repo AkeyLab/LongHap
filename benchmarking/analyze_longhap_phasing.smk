@@ -12,6 +12,7 @@ reference_fasta = base_dir + 'reference/hs1.upper.fa'
 reference_fasta_index = base_dir + 'reference/hs1.upper.fa.fai'
 par=base_dir + 'reference/chm13v2.0_PAR.bed'
 
+exons=base_dir + "reference/chm13v2.0_GENCODEv35_CAT_Liftoff.vep.exons.bed"
 omim_regions=base_dir + "reference/genemap2_t2t.txt"
 
 samples = ['HG00609', 'HG00658', 'HG00738', 'HG01099', 'HG02723', 'HG02615', 'HG002']
@@ -52,7 +53,8 @@ rule all:
         expand(base_dir + "{sample}/longhap/{tool}_omim_regions_switch_error_counts.bed", sample=samples, tool=tools),
         expand(base_dir + "{sample}/longhap/{tool}_omim_regions_switch_error_counts_rare.bed", sample=samples, tool=tools),
         expand(base_dir + "{sample}/longhap/{tool}_omim_regions_switch_error_counts_complex.bed", sample=samples, tool=tools),
-        expand(base_dir + "{sample}/longhap/{tool}_omim_regions_switch_error_counts_rare_complex.bed", sample=samples, tool=tools)
+        expand(base_dir + "{sample}/longhap/{tool}_omim_regions_switch_error_counts_rare_complex.bed", sample=samples, tool=tools),
+        expand(longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.custom.tab'), sample=samples, chrom=chromosomes, tool=tools),
 
 rule window_reference:
     input:
@@ -384,6 +386,36 @@ rule run_whatshap_compare_rare_complex:
         "--switch-error-bed {output.bed} <(bcftools norm -r {params.chrom} -m -any {input.gt}) "
         "<(bcftools annotate -x \"FORMAT/PS\" {input.vcf} | bcftools norm -m -any  | "
         "bcftools view -T <(sort -k2n {input.shared_sites}) | bcftools view -V snps)"
+
+rule eval_ph_cm_lh_sh:
+    input:
+        vcf = longhap_vcf.replace('.vcf.gz', '.annotated.rare.vcf.gz'),
+        gt=base_dir + "{sample}/dipcall/asm.dip.vcf.gz",
+        tbi=base_dir + "{sample}/dipcall/asm.dip.vcf.gz.tbi",
+        exons =exons,
+        baseline=longhap_vcf.replace('.vcf.gz', '.annotated.rare.vcf.gz').format(tool='longhap'),
+        shared_sites=base_dir + "{sample}/longhap/shared_phased_rare_sites_chr{chrom}.tab"
+    output:
+        summary=longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.custom.tab'),
+        genes=longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.genes.tsv'),
+        bed=longhap_vcf.replace('.vcf.gz', '.annotated.switch_errors.custom.bed'),
+    params:
+        chrom='chr{chrom}',
+        options=lambda wildcards, input: f"--baseline_vcf <(bcftools norm -m -any {input.baseline} | bcftools view -T <(sort -k2n {input.shared_sites}))" if wildcards.tool == 'longhap_meth'  else ''
+    wildcard_constraints:
+        aligner=aligner,
+        seq_tech="|".join(seq_tech),
+        phasing_method='longhap_meth'
+    resources:
+        mem_mb=2 * 1024,
+        runtime=5
+    conda:
+        "envs/longhap.yaml"
+    shell:
+        "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf} | bcftools view -T <(sort -k2n {input.shared_sites})) "
+        "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
+        "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
+        "'--evaluate_sv --rare_variants {params.options}"
 
 
 def get_switch_errors_omim(wildcards):
