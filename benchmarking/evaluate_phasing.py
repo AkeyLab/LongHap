@@ -48,6 +48,7 @@ class VariantSet:
     phased: np.ndarray
     phase_block: np.ndarray
     variant_type: np.ndarray
+    allele_frequency: np.ndarray      # INFO/AF, NaN where the field is absent
     allele_a: np.ndarray
     allele_b: np.ndarray
     complete: np.ndarray      # genotype has no missing allele
@@ -77,6 +78,27 @@ def classify(ref, alt):
     return 'Other'
 
 
+def parse_allele_frequency(variant):
+    """``INFO/AF`` as a float, NaN when the variant carries no AF at all.
+
+    NaN is how "not in the reference panel" is represented, and it must never
+    count as rare: ``np.nan < threshold`` is already False, so the comparison
+    does the right thing on its own -- do not "simplify" it into something that
+    treats missing as zero.
+
+    ``bcftools norm -m -any`` subsets a Number=A field per split record, so the
+    value is normally scalar; where a sequence still arrives the **largest** is
+    taken, so a site counts as rare only when every ALT of it is rare.
+    """
+    af = variant.INFO.get('AF')
+    if af is None:
+        return float('nan')
+    if isinstance(af, (tuple, list)):
+        values = [v for v in af if v is not None]
+        return max(values) if values else float('nan')
+    return float(af)
+
+
 def load_phasing(vcf_f, sample=None, only_snvs=False, keep_duplicate_positions=False):
     """Load heterozygous variants of one sample from a VCF.
 
@@ -100,6 +122,7 @@ def load_phasing(vcf_f, sample=None, only_snvs=False, keep_duplicate_positions=F
     chromosome, position, ref_l, alt_l = [], [], [], []
     genotypes, phased, phase_block = [], [], []
     variant_type, allele_a, allele_b, complete = [], [], [], []
+    allele_frequency = []
     n_records = n_duplicate = n_total = 0
     all_keys = set()
     prev_key = None
@@ -141,6 +164,7 @@ def load_phasing(vcf_f, sample=None, only_snvs=False, keep_duplicate_positions=F
         phased.append(bool(variant.genotypes[0][2]))
         phase_block.append(int(variant.format('PS')[0][0]) if 'PS' in variant.FORMAT else -1)
         variant_type.append(classify(ref, alt))
+        allele_frequency.append(parse_allele_frequency(variant))
         allele_a.append(alleles[gt[0]] if has_all else None)
         allele_b.append(alleles[gt[1]] if has_all else None)
         complete.append(has_all)
@@ -165,6 +189,7 @@ def load_phasing(vcf_f, sample=None, only_snvs=False, keep_duplicate_positions=F
         phase_block=np.array(phase_block, dtype=np.int64),
         variant_type=np.array(variant_type, dtype=object),
         allele_a=np.array(allele_a, dtype=object),
+        allele_frequency=np.array(allele_frequency, dtype=float),
         allele_b=np.array(allele_b, dtype=object),
         complete=np.array(complete, dtype=bool),
         n_records=n_records,
@@ -379,6 +404,7 @@ class SvResult:
     ambiguous: int = 0      # anchors disagree, so a real switch sits at the SV
     one_sided: int = 0      # only one of the two connections is evaluable
     no_anchor: int = 0      # neither side is evaluable
+    anchor_is_target: int = 0   # connections whose anchor is itself a target
     by_type: Optional[Counter] = None
     positions: Optional[List[Tuple[str, int, int]]] = None
 
@@ -586,35 +612,36 @@ def nearest_snp_indices(chain, target):
     return left, right
 
 
-def evaluate_svs(overlapping_sites, target, gt, min_sv_length=0):
-    """Score how well each non-SNP is placed relative to its flanking SNPs.
+def evaluate_anchored(overlapping_sites, target, gt, is_target):
+    """Score how well each variant of one class is placed relative to its flanking SNPs.
 
-    For every scorable non-SNP the two connections ``anchor_a - SV - anchor_b`` are
+    For every scorable target the two connections ``anchor_a - target - anchor_b`` are
     tested against the truth, where the anchors are the nearest SNPs on either side.
     The two connections are judged independently: a connection needs only its own two
-    variants to share a target phase set and a truth phase set, so an SV at the start
+    variants to share a target phase set and a truth phase set, so a target at the start
     of a block is still scored against the anchor that follows it.
 
-    Reads nothing but position, alleles, genotype and PS, so it applies to any phasing
-    tool that writes standard phase sets.
+    ``is_target(i)`` picks the class under test -- non-SNPs for ``--evaluate_sv``, rare
+    variants and rare non-SNPs for ``--rare_variants``.  Anchoring on SNPs keeps both
+    reference points on variants a phaser places from direct read support whichever
+    class is being scored, so the three sections share one reference frame and differ
+    only in what sits between the anchors.
+
+    Reads nothing but position, alleles, genotype, AF and PS, so it applies to any
+    phasing tool that writes standard phase sets.
     """
     result = SvResult(by_type=Counter(), positions=[])
-    # Every non-SNP in the call set, phased or not, so the denominator does not move
+    # Every target in the call set, phased or not, so the denominator does not move
     # with how much of the call set a given tool managed to phase.
     for i in range(len(target)):
-        if target.variant_type[i] == 'SNP':
-            continue
-        if min_sv_length and allele_length(target, i) < min_sv_length:
-            continue
-        result.total += 1
+        if is_target(i):
+            result.total += 1
 
     for chain in scorable_chains(overlapping_sites, target, gt).values():
         agree = agreement(chain, target, gt)
         left, right = nearest_snp_indices(chain, target)
         for k, (i, j) in enumerate(chain):
-            if target.variant_type[i] == 'SNP':
-                continue
-            if min_sv_length and allele_length(target, i) < min_sv_length:
+            if not is_target(i):
                 continue
             result.svs += 1
             result.by_type[target.variant_type[i]] += 1
@@ -638,6 +665,10 @@ def evaluate_svs(overlapping_sites, target, gt, min_sv_length=0):
             errors = 0
             for anchor in sides:
                 result.connections += 1
+                # an anchor drawn from the class under test cannot separate a
+                # misplaced target from a misplaced anchor; counted, not excluded
+                if is_target(chain[anchor][0]):
+                    result.anchor_is_target += 1
                 if agree[anchor] != agree[k]:
                     errors += 1
                     lo, hi = sorted((anchor, k))
@@ -655,6 +686,32 @@ def evaluate_svs(overlapping_sites, target, gt, min_sv_length=0):
                 # between them and the SV's own placement cannot be singled out
                 result.ambiguous += 1
     return result
+
+
+def evaluate_svs(overlapping_sites, target, gt, min_sv_length=0):
+    """Score how well each non-SNP is placed relative to its flanking SNPs."""
+    def is_sv(i):
+        return (target.variant_type[i] != 'SNP'
+                and not (min_sv_length and allele_length(target, i) < min_sv_length))
+    return evaluate_anchored(overlapping_sites, target, gt, is_sv)
+
+
+def evaluate_rare(overlapping_sites, target, gt, max_af, min_sv_length=0, svs_only=False):
+    """Score how well each rare variant is placed relative to its flanking SNPs.
+
+    ``svs_only`` narrows the class to rare non-SNPs, honouring ``min_sv_length`` so the
+    two SV sections stay comparable.  A variant with no ``INFO/AF`` is never a target --
+    ``np.nan < max_af`` is False -- but stays available as an anchor, since not being in
+    the reference panel says nothing about how well the phaser placed it.
+    """
+    def is_rare(i):
+        if not target.allele_frequency[i] < max_af:
+            return False
+        if not svs_only:
+            return True
+        return (target.variant_type[i] != 'SNP'
+                and not (min_sv_length and allele_length(target, i) < min_sv_length))
+    return evaluate_anchored(overlapping_sites, target, gt, is_rare)
 
 
 def load_annotations(path, chromosomes=None):
@@ -921,9 +978,27 @@ def report_windows(result, header):
                percent(result.hamming, result.covered_variants))
 
 
+def report_anchored(result, header, noun):
+    print()
+    print(f'{header}:'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
+    print_stat(f'{noun} in the call set', result.total)
+    print_stat('--> evaluated', result.svs)
+    print_stat('anchored connections', result.connections)
+    print_stat('connection errors', result.errors)
+    print_stat('connection error rate', percent(result.errors, result.connections))
+    print_stat('--> correct', result.correct)
+    print_stat('--> flipped', result.flipped)
+    print_stat('--> ambiguous, anchors disagree', result.ambiguous)
+    print_stat('--> anchored on one side only', result.one_sided)
+    print_stat('skipped, no anchoring SNP in block', result.no_anchor)
+    print_stat('connections whose anchor is also a target', result.anchor_is_target)
+    for name, count in sorted(result.by_type.items()):
+        print_stat(f'by type: {name}', count)
+
+
 def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
            new_connections=None, sv=None, genes=None, names=('truth', 'query'),
-           windowed=None):
+           windowed=None, rare=None, rare_sv=None):
     gt_name, target_name = names
     print('VARIANT COUNTS (heterozygous / all): ')
     for name, vs in ((gt_name, gt), (target_name, target)):
@@ -950,20 +1025,11 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
             report_windows(result, header)
 
     if sv is not None:
-        print()
-        print('SV PHASING (SNP-anchored):'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
-        print_stat('non-SNPs in the call set', sv.total)
-        print_stat('--> evaluated', sv.svs)
-        print_stat('anchored connections', sv.connections)
-        print_stat('connection errors', sv.errors)
-        print_stat('connection error rate', percent(sv.errors, sv.connections))
-        print_stat('--> SVs correct', sv.correct)
-        print_stat('--> SVs flipped', sv.flipped)
-        print_stat('--> SVs ambiguous, anchors disagree', sv.ambiguous)
-        print_stat('--> SVs anchored on one side only', sv.one_sided)
-        print_stat('SVs skipped, no anchoring SNP in block', sv.no_anchor)
-        for name, count in sorted(sv.by_type.items()):
-            print_stat(f'by type: {name}', count)
+        report_anchored(sv, 'SV PHASING (SNP-anchored)', 'non-SNPs')
+    if rare is not None:
+        report_anchored(rare, 'RARE VARIANT PHASING (SNP-anchored)', 'rare variants')
+    if rare_sv is not None:
+        report_anchored(rare_sv, 'RARE SV PHASING (SNP-anchored)', 'rare non-SNPs')
 
     print()
     print('BETWEEN PHASE BLOCKS:'.rjust(LABEL_WIDTH), '-' * COUNT_WIDTH)
@@ -1051,8 +1117,39 @@ def window_columns(prefix, result):
     }
 
 
+SV_TYPES = ('DEL', 'INS', 'Multi', 'Other')
+
+
+def anchored_columns(prefix, result):
+    """The statistics of one anchored section, named under one section prefix.
+
+    ``sv`` keeps the column names it has always had, so rows written before and
+    after the rare sections existed still concatenate.
+    """
+    keys = ('total', 'evaluated', 'connections', 'errors', 'error_rate', 'correct',
+            'flipped', 'ambiguous', 'one_sided', 'no_anchor', 'anchor_is_target')
+    if result is None:
+        return {f'{prefix}_{k}': '' for k in keys + SV_TYPES}
+    out = {
+        f'{prefix}_total': result.total,
+        f'{prefix}_evaluated': result.svs,
+        f'{prefix}_connections': result.connections,
+        f'{prefix}_errors': result.errors,
+        f'{prefix}_error_rate': fraction(result.errors, result.connections),
+        f'{prefix}_correct': result.correct,
+        f'{prefix}_flipped': result.flipped,
+        f'{prefix}_ambiguous': result.ambiguous,
+        f'{prefix}_one_sided': result.one_sided,
+        f'{prefix}_no_anchor': result.no_anchor,
+        f'{prefix}_anchor_is_target': result.anchor_is_target,
+    }
+    out.update({f'{prefix}_{name}': result.by_type.get(name, 0) for name in SV_TYPES})
+    return out
+
+
 def collect_summary(args, target, gt, overlapping_sites, within, junctions, chromosome_wide,
-                    new_connections=None, sv=None, genes=None, windowed=None):
+                    new_connections=None, sv=None, genes=None, windowed=None,
+                    rare=None, rare_sv=None):
     """Every statistic the report prints, as one flat row.
 
     Built from the same result objects report() reads, so the two cannot disagree.
@@ -1132,25 +1229,10 @@ def collect_summary(args, target, gt, overlapping_sites, within, junctions, chro
             'newconn_skipped_unphased_baseline': n.skipped_no_baseline_phase,
         })
 
-    sv_types = ('DEL', 'INS', 'Multi', 'Other')
-    if sv is None:
-        row.update({f'sv_{k}': '' for k in (
-            'total', 'evaluated', 'connections', 'errors', 'error_rate', 'correct', 'flipped',
-            'ambiguous', 'one_sided', 'no_anchor') + sv_types})
-    else:
-        row.update({
-            'sv_total': sv.total,
-            'sv_evaluated': sv.svs,
-            'sv_connections': sv.connections,
-            'sv_errors': sv.errors,
-            'sv_error_rate': fraction(sv.errors, sv.connections),
-            'sv_correct': sv.correct,
-            'sv_flipped': sv.flipped,
-            'sv_ambiguous': sv.ambiguous,
-            'sv_one_sided': sv.one_sided,
-            'sv_no_anchor': sv.no_anchor,
-        })
-        row.update({f'sv_{name}': sv.by_type.get(name, 0) for name in sv_types})
+    row.update(anchored_columns('sv', sv))
+    row['max_af'] = getattr(args, 'max_af', '') if rare is not None else ''
+    row.update(anchored_columns('rare', rare))
+    row.update(anchored_columns('raresv', rare_sv))
 
     if genes is None:
         row.update({f'gene_{k}': '' for k in (
@@ -1224,6 +1306,20 @@ def main(argv):
                         help='Additionally score how each non-SNP is placed relative to the '
                              'nearest SNP on either side. Works for any phasing tool that '
                              'writes FORMAT/PS (HP tags are not read).')
+    parser.add_argument('--rare_variants', action='store_true', default=False,
+                        help='Read INFO/AF and additionally score how each rare variant, and '
+                             'each rare non-SNP, is placed relative to the nearest SNP on '
+                             'either side -- the same test --evaluate_sv applies to non-SNPs. '
+                             'Needs a VCF carrying every variant, not one already filtered to '
+                             'the rare ones, or there are no common variants left to anchor on.')
+    parser.add_argument('--max_af', type=float, default=0.01, metavar='AF',
+                        help='With --rare_variants, the allele frequency below which a variant '
+                             'counts as rare. A variant with no INFO/AF is never a target, but '
+                             'stays available as an anchor (default: %(default)s)')
+    parser.add_argument('--rare_error_bed',
+                        help='Write rare-variant connections that disagree to this BED file')
+    parser.add_argument('--rare_sv_error_bed',
+                        help='Write rare-SV connections that disagree to this BED file')
     parser.add_argument('--min_sv_length', type=int, default=0,
                         help='With --evaluate_sv, only score non-SNPs whose longest allele is at '
                              'least this many bp (default: all non-SNPs)')
@@ -1277,18 +1373,25 @@ def main(argv):
     if args.evaluate_sv:
         sv = evaluate_svs(overlapping_sites, target, gt, min_sv_length=args.min_sv_length)
 
+    rare = rare_sv = None
+    if args.rare_variants:
+        rare = evaluate_rare(overlapping_sites, target, gt, args.max_af)
+        rare_sv = evaluate_rare(overlapping_sites, target, gt, args.max_af,
+                                min_sv_length=args.min_sv_length, svs_only=True)
+
     genes = None
     if args.annotations:
         exons = load_annotations(args.annotations, set(target.chromosome.tolist()))
         genes = evaluate_genes(overlapping_sites, target, gt, exons)
 
     report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
-           new_connections, sv, genes, windowed=windowed)
+           new_connections, sv, genes, windowed=windowed, rare=rare, rare_sv=rare_sv)
 
     if args.summary_tsv:
         write_summary_tsv(args.summary_tsv,
                           collect_summary(args, target, gt, overlapping_sites, within, junctions,
-                                          chromosome_wide, new_connections, sv, genes, windowed))
+                                          chromosome_wide, new_connections, sv, genes, windowed,
+                                          rare, rare_sv))
 
     if args.switch_error_bed:
         write_bed(args.switch_error_bed, within.switch_positions, 'switch')
@@ -1298,6 +1401,10 @@ def main(argv):
         write_bed(args.new_connection_bed, new_connections.positions, 'new_connection')
     if args.sv_error_bed and sv is not None:
         write_bed(args.sv_error_bed, sv.positions, 'sv_connection')
+    if args.rare_error_bed and rare is not None:
+        write_bed(args.rare_error_bed, rare.positions, 'rare_connection')
+    if args.rare_sv_error_bed and rare_sv is not None:
+        write_bed(args.rare_sv_error_bed, rare_sv.positions, 'rare_sv_connection')
     if args.gene_error_bed and genes is not None:
         write_bed(args.gene_error_bed, genes.positions, 'gene_connection')
     if args.gene_tsv and genes is not None:
