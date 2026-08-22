@@ -38,6 +38,9 @@ groups:
  - evaluate_phasing_custom_longhap_meth=EVAL
  - evaluate_phasing_custom_methphaser=EVAL
  - evaluate_phasing_custom=EVAL
+ - evaluate_phasing_custom_longhap_meth_shared=EVAL
+ - evaluate_phasing_custom_methphaser_shared=EVAL
+ - evaluate_phasing_custom_shared=EVAL
 
 group-components:
  - PREP=5
