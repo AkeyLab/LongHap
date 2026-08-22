@@ -1,7 +1,7 @@
 import glob
 
 configfile: 'config/config.yaml'
-longhap_path = '~/LongHap/longhap_dev.py'
+longhap_path = '~/LongHap/longhap.py'
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']
@@ -20,7 +20,7 @@ sex_chromosomes = []
 phasing_methods = ['whatshap', 'whatshap_and_methphaser', 'longhap_meth',
                    "longhap", 'hapcut2', "longphase"]# 'haplomaker',
 
-seq_tech = ['hifi']#, 'ont_r10.4.1_dorado', 'ul_ont_r10.4.1_dorado']
+seq_tech = ['hifi', 'ont_r10.4.1_dorado', 'ul_ont_r10.4.1_dorado']
 
 rule all:
     input:
@@ -519,7 +519,7 @@ rule run_longhap_meth_phase_indels:
         "--output_unphaseable_variants {output.unphaseable_variants} "
         "--output_read_states {output.read_states} --output_allele_coverage {output.allele_coverage} " 
         "-m {input.methylation} --output_transition_matrix_meth {output.npz_meth} "
-        "--output_differentially_methylated_sites {output.meth} {params.options} --force --min_meth_difference 1"
+        "--output_differentially_methylated_sites {output.meth} {params.options} --force"
 
 rule run_longhap_phase:
     input:
