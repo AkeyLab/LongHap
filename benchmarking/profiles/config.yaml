@@ -35,12 +35,12 @@ groups:
  - run_whatshap_compare_shared_sites=EVAL
  - run_whatshap_compare_shared_sites_complex=EVAL
  - run_whatshap_stats_complex=EVAL
- - evaluate_phasing_custom_longhap_meth=EVAL
- - evaluate_phasing_custom_methphaser=EVAL
- - evaluate_phasing_custom=EVAL
- - evaluate_phasing_custom_longhap_meth_shared=EVAL
- - evaluate_phasing_custom_methphaser_shared=EVAL
- - evaluate_phasing_custom_shared=EVAL
+ - eval_ph_cm_lh=EVAL
+ - eval_ph_cm_mp=EVAL
+ - eval_ph_cm=EVAL
+ - eval_ph_cm_lh_sh=EVAL
+ - eval_ph_cm_mp_sh=EVAL
+ - eval_ph_cm_sh=EVAL
 
 group-components:
  - PREP=5
