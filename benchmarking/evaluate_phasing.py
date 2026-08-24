@@ -384,6 +384,11 @@ class JunctionResult:
     structural_joins: int = 0           # sum over target blocks of (baseline blocks - 1)
     singleton_target_blocks: int = 0    # target blocks holding one scorable variant
     interleaved_blocks: int = 0         # target blocks whose baseline blocks alternate
+    # the same joins scored against the baseline blocks' own boundary variants
+    naive_junctions: int = 0
+    naive_errors: int = 0
+    naive_no_truth_frame: int = 0       # of those, unevaluable at the naive endpoints
+    naive_differs: int = 0              # joins where the naive pair is not the scored pair
     # only filled in without a baseline call set
     at_singleton: int = 0               # junctions touching a singleton target block
     errors_at_singleton: int = 0        # of those, the ones that are errors
@@ -883,6 +888,13 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
     result = JunctionResult(positions=[])
     chains: Dict[tuple, List[tuple]] = defaultdict(list)
     scored_baseline: Counter = Counter()
+    # First and last scorable variant of each baseline block, taken over every
+    # variant rather than over the per-target-block chains below.  A variant the
+    # target stranded at its old PS is missing from those chains but present
+    # here, which is what lets the naive statistic reach it.  overlapping_sites
+    # is in VCF order, so first come first and last wins.
+    first_of_baseline: Dict[tuple, tuple] = {}
+    last_of_baseline: Dict[tuple, tuple] = {}
     for i, j in overlapping_sites:
         pair = (int(i), int(j))
         if pair not in block_of:
@@ -891,6 +903,8 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
             result.skipped_no_baseline_phase += 1
             continue
         scored_baseline[baseline_of[pair[0]]] += 1
+        first_of_baseline.setdefault(baseline_of[pair[0]], pair)
+        last_of_baseline[baseline_of[pair[0]]] = pair
         chains[(target.chromosome[i], int(target.phase_block[i]))].append(pair)
 
     # Both counts are taken over exactly the variants scanned below.  Their
@@ -926,6 +940,24 @@ def evaluate_new_junctions(overlapping_sites, target, gt, baseline_of):
             if agree[k] != agree[k + 1]:
                 result.errors += 1
                 result.positions.append(interval(target, chain[k][0], chain[k + 1][0]))
+
+            # The same join, scored where a reader would naively look for it: at
+            # the two baseline blocks' own boundary variants.  For a target that
+            # relabelled every variant those are the two just scored and the
+            # counts cannot diverge; where one was stranded this reads it, which
+            # is the whole point of reporting the two rates side by side.
+            naive_a = last_of_baseline[baseline_of[i0]]
+            naive_b = first_of_baseline[baseline_of[i1]]
+            if (naive_a, naive_b) != (chain[k], chain[k + 1]):
+                result.naive_differs += 1
+            if gt.phase_block[naive_a[1]] != gt.phase_block[naive_b[1]]:
+                result.naive_no_truth_frame += 1
+            else:
+                result.naive_junctions += 1
+                agree_a = target.allele_a[naive_a[0]] == gt.allele_a[naive_a[1]]
+                agree_b = target.allele_a[naive_b[0]] == gt.allele_a[naive_b[1]]
+                if agree_a != agree_b:
+                    result.naive_errors += 1
         # A block whose baseline blocks alternate along it would be scanned as
         # more joins than it made.  Never seen in practice; counted so that it
         # cannot pass unnoticed if it starts happening.
@@ -1062,6 +1094,11 @@ def report(target, gt, overlapping_sites, within, junctions, chromosome_wide,
                    n.structural_joins - n.junctions - n.no_truth_frame)
         print_stat('--> not assessed, no truth frame', n.no_truth_frame)
         print_stat('variants skipped, unphased in baseline', n.skipped_no_baseline_phase)
+        print_stat('naive: connections assessed', n.naive_junctions)
+        print_stat('naive: connection errors', n.naive_errors)
+        print_stat('naive: connection error rate', percent(n.naive_errors, n.naive_junctions))
+        print_stat('--> not assessed, no truth frame', n.naive_no_truth_frame)
+        print_stat('--> joins where the naive pair differs', n.naive_differs)
 
     if genes is not None:
         print()
@@ -1209,7 +1246,9 @@ def collect_summary(args, target, gt, overlapping_sites, within, junctions, chro
             'assessed', 'errors', 'rate', 'baseline_blocks', 'target_blocks', 'joins_between',
             'singleton_baseline_blocks', 'singleton_target_blocks', 'interleaved_blocks',
             'joins_total', 'not_assessed_no_truth_variant',
-            'not_assessed_no_truth_frame', 'skipped_unphased_baseline')})
+            'not_assessed_no_truth_frame', 'skipped_unphased_baseline',
+            'naive_assessed', 'naive_errors', 'naive_rate',
+            'naive_no_truth_frame', 'naive_differs')})
     else:
         n = new_connections
         row.update({
@@ -1227,6 +1266,11 @@ def collect_summary(args, target, gt, overlapping_sites, within, junctions, chro
                 n.structural_joins - n.junctions - n.no_truth_frame,
             'newconn_not_assessed_no_truth_frame': n.no_truth_frame,
             'newconn_skipped_unphased_baseline': n.skipped_no_baseline_phase,
+            'newconn_naive_assessed': n.naive_junctions,
+            'newconn_naive_errors': n.naive_errors,
+            'newconn_naive_rate': fraction(n.naive_errors, n.naive_junctions),
+            'newconn_naive_no_truth_frame': n.naive_no_truth_frame,
+            'newconn_naive_differs': n.naive_differs,
         })
 
     row.update(anchored_columns('sv', sv))
