@@ -284,3 +284,80 @@ def test_interleaved_baseline_blocks_are_flagged(write_vcf):
 def test_ordinary_data_is_not_flagged_as_interleaved(write_vcf):
     for records in (_merge_with_orphan(True), _merge_with_orphan(False)):
         assert _setup(write_vcf, *records).interleaved_blocks == 0
+
+
+# --------------------------------------------------------------------------- #
+# the naive rate, reported beside the corrected one
+#
+# The corrected scan steps over a variant the target stranded at its old PS; the
+# naive one reads it anyway, at the two baseline blocks' own boundary variants.
+# The gap between the two rates is the size of that artefact, and for a target
+# that strands nothing the two are the same measurement.
+# --------------------------------------------------------------------------- #
+
+def test_the_naive_pair_reads_the_stranded_variant(write_vcf):
+    """flip=True is the correct merge, so the two rates must disagree.
+
+    Site 40 kept the un-flipped genotype, so scoring against it reports an error
+    for a join that was in fact made correctly.
+    """
+    res = _setup(write_vcf, *_merge_with_orphan(flip=True))
+    assert (res.junctions, res.errors) == (1, 0)              # corrected: right
+    assert (res.naive_junctions, res.naive_errors) == (1, 1)  # naive: wrong
+    assert res.naive_differs == 1
+
+
+def test_the_naive_verdict_is_blind_to_what_the_target_did(write_vcf):
+    """The corrected rate tracks the merge; the naive one cannot see it at all.
+
+    Site 40 keeps the baseline's orientation whichever way the block was merged,
+    so the naive pair 30|40 is comparing two variants the *baseline* placed and
+    returns the same answer for both merges.  It is not a noisier estimate of the
+    same thing -- it is measuring the base phaser's arbitrary cross-block
+    orientation instead of the join.
+    """
+    correct_merge = _setup(write_vcf, *_merge_with_orphan(flip=True))
+    wrong_merge = _setup(write_vcf, *_merge_with_orphan(flip=False))
+
+    # the corrected rate distinguishes the two
+    assert (correct_merge.errors, wrong_merge.errors) == (0, 1)
+    # the naive rate does not
+    assert correct_merge.naive_errors == wrong_merge.naive_errors == 1
+    assert correct_merge.naive_differs == wrong_merge.naive_differs == 1
+
+
+def test_the_two_rates_are_one_measurement_when_nothing_is_stranded(write_vcf):
+    """The same merge with the PS written out properly."""
+    target, baseline, truth = _merge_with_orphan(flip=False)
+    target[3] = _snp('chr1', 40, '0|1', 1)          # site 40 relabelled as well
+    res = _setup(write_vcf, target, baseline, truth)
+    assert res.naive_differs == 0
+    assert (res.naive_junctions, res.naive_errors) == (res.junctions, res.errors)
+
+
+def test_a_target_that_strands_nothing_never_diverges(write_vcf):
+    """Several joins at once, none of them stranded."""
+    t = [_snp('chr1', p, '0|1', 1) for p in (10, 20, 30, 40, 50, 60)]
+    b = [_snp('chr1', 10, '0|1', 5), _snp('chr1', 20, '0|1', 5),
+         _snp('chr1', 30, '0|1', 6), _snp('chr1', 40, '0|1', 6),
+         _snp('chr1', 50, '0|1', 7), _snp('chr1', 60, '0|1', 7)]
+    g = [_snp('chr1', p, '0|1', None) for p in (10, 20, 30, 40, 50, 60)]
+    res = _setup(write_vcf, t, b, g)
+    assert res.junctions == 2
+    assert res.naive_differs == 0
+    assert (res.naive_junctions, res.naive_errors) == (res.junctions, res.errors)
+
+
+def test_two_stranded_variants_differ_at_both_joins(write_vcf):
+    t = [_snp('chr1', 10, '0|1', 1), _snp('chr1', 20, '0|1', 1),
+         _snp('chr1', 30, '0|1', 6),                    # stranded
+         _snp('chr1', 40, '0|1', 1),
+         _snp('chr1', 50, '0|1', 7),                    # stranded
+         _snp('chr1', 60, '0|1', 1)]
+    b = [_snp('chr1', 10, '0|1', 5), _snp('chr1', 20, '0|1', 5),
+         _snp('chr1', 30, '0|1', 6), _snp('chr1', 40, '0|1', 6),
+         _snp('chr1', 50, '0|1', 7), _snp('chr1', 60, '0|1', 7)]
+    g = [_snp('chr1', p, '0|1', None) for p in (10, 20, 30, 40, 50, 60)]
+    res = _setup(write_vcf, t, b, g)
+    assert res.junctions == 2
+    assert res.naive_differs == 2
