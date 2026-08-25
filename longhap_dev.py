@@ -32,10 +32,7 @@ class LongHap:
                  sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
                  min_base_quality=0, min_mapq=20,
                  use_supplementary=False, supplementary_distance=100000,
-                 min_meth_difference=0.0, min_join_support=1,
-                 no_connect_phase_blocks=False, no_mirror_transition=False,
-                 min_transition_margin=0.0,
-                 min_variant_consistency=0.0, min_consistency_cov=5,
+                 min_meth_difference=0.0,
                  # flank_snv=33, flank_indel=100,
                  seqtech='pacbio'):
         self.chrom = chrom
@@ -70,14 +67,6 @@ class LongHap:
         self.use_supplementary = use_supplementary
         self.supplementary_distance = supplementary_distance
         self.min_meth_difference = min_meth_difference
-        self.min_join_support = min_join_support
-        self.no_connect_phase_blocks = no_connect_phase_blocks
-        self.min_transition_margin = min_transition_margin
-        self.min_variant_consistency = min_variant_consistency
-        self.min_consistency_cov = min_consistency_cov
-        # mirror_transition is a staticmethod called from several places; a class
-        # attribute is the least invasive way to switch it off for the whole run
-        LongHap._skip_mirror = no_mirror_transition
         # self.flank_snv = flank_snv
         # self.flank_indel = flank_indel
         self.seqtech = seqtech
@@ -171,8 +160,6 @@ class LongHap:
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             self.connect_phase_blocks()
-            self.apply_transition_margin()
-            self.audit_transition_alignment()
 
             if self.output_allele_coverage is not None:
                 np.savez(self.output_allele_coverage, self.allele_coverage)
@@ -185,198 +172,6 @@ class LongHap:
                 json.dump(self.variant_read_mapping, open(self.output_variant_read_mapping, 'w'))
             if self.output_unphaseable_variants is not None:
                 np.savez(self.output_unphaseable_variants, self.unphaseable)
-
-    def apply_transition_margin(self):
-        """
-        Refuse to commit to a transition whose evidence is close to a tie.
-
-        The transition matrix is row-normalised at this point, so the smaller
-        entry of a row is the share of the evidence held by the losing
-        direction.  Where that share reaches ``min_transition_margin`` the two
-        directions are too close to call, and the transition is flattened to
-        0.5.  ``calculate_forward_path_probabilities`` starts a new haplotype
-        block on exactly that pattern, so a thin margin ends the block instead
-        of being resolved by a coin flip.
-
-        Transitions with no read support are already flat and are therefore
-        unaffected: this only ever adds block breaks, never removes one.
-        """
-        if not self.min_transition_margin > 0:
-            return
-        t = self.transition_matrix
-        # share held by the losing direction, taken as the weaker of the two rows
-        loser = np.maximum(np.minimum(t[0, 0, :], t[0, 1, :]),
-                           np.minimum(t[1, 0, :], t[1, 1, :]))
-        already_flat = (t[0, 0, :] == t[0, 1, :]) & (t[1, 0, :] == t[1, 1, :])
-        thin = (loser >= self.min_transition_margin) & ~already_flat
-        logging.info(f'Transition margin {self.min_transition_margin}: breaking {int(thin.sum())} of '
-                     f'{int((~already_flat).sum())} informative transitions '
-                     f'({thin.sum() / max((~already_flat).sum(), 1):.2%})')
-        self.transition_matrix[:, :, thin] = 0.5
-
-    def read_haplotype_assignments(self):
-        """
-        Assign every read to a haplotype by majority vote over the variants it covers.
-
-        ``haplotypes[0, v]`` is the allele index carried by haplotype 0 at variant
-        ``v``, and a read state is an allele index, so a read supports haplotype 0
-        at ``v`` exactly when the two agree.
-        """
-        hap0 = self.haplotypes[0]
-        assignments = {}
-        for read, states in self.read_states.items():
-            for_hap0 = against = 0
-            for k, st in states.items():
-                if st is None or st == -1:
-                    continue
-                h = hap0[int(k)]
-                if h == -1:
-                    continue
-                if st == h:
-                    for_hap0 += 1
-                else:
-                    against += 1
-            # a read spanning too few phased variants cannot be placed reliably
-            if for_hap0 + against < 3 or for_hap0 == against:
-                continue
-            assignments[read] = 0 if for_hap0 > against else 1
-        return assignments
-
-    def variant_read_consistency(self, assignments):
-        """
-        For each variant, the share of covering reads whose allele agrees with the
-        haplotype that read was assigned to.  A cleanly phased variant sits near
-        1.0; one whose reads carry no coherent signal sits near 0.5.
-        """
-        hap0 = self.haplotypes[0]
-        agree = np.zeros(self.num_variants)
-        total = np.zeros(self.num_variants)
-        for read, states in self.read_states.items():
-            rh = assignments.get(read)
-            if rh is None:
-                continue
-            for k, st in states.items():
-                if st is None or st == -1:
-                    continue
-                v = int(k)
-                h = hap0[v]
-                if h == -1:
-                    continue
-                total[v] += 1
-                if (st == h) == (rh == 0):
-                    agree[v] += 1
-        with np.errstate(invalid='ignore', divide='ignore'):
-            consistency = np.where(total > 0, agree / np.maximum(total, 1), np.nan)
-        return consistency, total
-
-    def repair_transition_gaps(self):
-        """
-        Restore the invariant the Viterbi relies on after variants leave ``phaseable``.
-
-        ``calculate_forward_path_probabilities`` reads the transition for the step
-        ``phaseable[i] -> phaseable[i+1]`` from column ``phaseable[i]``, so every
-        gap opened in ``phaseable`` needs that column rebuilt from the reads that
-        span the new, wider pair.
-        """
-        p = self.phaseable
-        repaired = 0
-        for i in range(len(p) - 1):
-            a, b = int(p[i]), int(p[i + 1])
-            if b - a <= 1:
-                continue
-            t = self.get_allele_transitions_from_known_read_states(a, b)
-            t = self.mirror_transition(t, normalized=False)
-            self.transition_matrix[:, :, a] = t / t.sum(axis=1, keepdims=True)
-            repaired += 1
-        return repaired
-
-    def refine_by_read_consistency(self):
-        """
-        Second pass: drop variants whose reads do not agree with the haplotype they
-        were placed on, bridge the chain across them, and phase again.
-
-        The first pass is only used to obtain haplotypes good enough to assign reads
-        to.  Variants that fail the consistency test are removed from the Markov
-        chain, and the transition that used to run through them is replaced by one
-        measured directly from the reads spanning the gap.
-
-        Note that a dropped variant currently also leaves the output unphased, since
-        ``write_phased_vcf`` emits anything outside ``phaseable`` without phase.
-        Placing them back onto the finished haplotypes is a separate step and is not
-        done here.
-        """
-        if not self.min_variant_consistency > 0:
-            return
-        assignments = self.read_haplotype_assignments()
-        consistency, total = self.variant_read_consistency(assignments)
-        candidates = self.phaseable[
-            (total[self.phaseable] >= self.min_consistency_cov) &
-            (consistency[self.phaseable] < self.min_variant_consistency)]
-        if candidates.size == 0:
-            logging.info('Consistency pass: no variant fell below the threshold.')
-            return
-        logging.info(f'Consistency pass: dropping {candidates.size} of {self.phaseable.size} variants '
-                     f'from the chain (consistency < {self.min_variant_consistency}, '
-                     f'coverage >= {self.min_consistency_cov})')
-        self.phaseable = self.phaseable[~np.isin(self.phaseable, candidates)]
-        self.unphaseable = np.sort(np.union1d(self.unphaseable, candidates)).astype(int)
-        repaired = self.repair_transition_gaps()
-        logging.info(f'Consistency pass: rebuilt {repaired} transitions spanning dropped variants')
-
-        # phase again from a clean slate
-        self.block_ends = []
-        self.haplotypes = np.zeros((2, self.num_variants))
-        self.delta = np.zeros((2, self.num_variants))
-        self.calculate_forward_path_probabilities()
-
-    def audit_transition_alignment(self):
-        """
-        Check the invariant the Viterbi depends on.
-
-        ``calculate_forward_path_probabilities`` reads the transition for the
-        step ``phaseable[i] -> phaseable[i+1]`` out of column ``phaseable[i]``.
-        Every place that drops a variant from ``phaseable`` is supposed to
-        rewrite that column with a transition that spans the new gap.  This
-        recomputes each one from the read states and reports where the stored
-        column disagrees with the pair it is actually being applied to.
-        """
-        out = os.environ.get('LONGHAP_AUDIT')
-        if not out:
-            return
-        p = self.phaseable
-        n_gap = n_gap_bad = n_adj = n_adj_bad = 0
-        with open(out, 'w') as fh:
-            print('pos_a', 'pos_b', 'idx_a', 'idx_b', 'gap', 'stored_dir', 'fresh_dir',
-                  'stored_00', 'stored_01', 'fresh_00', 'fresh_01', sep='\t', file=fh)
-            for i in range(len(p) - 1):
-                a, b = int(p[i]), int(p[i + 1])
-                stored = self.transition_matrix[:, :, a]
-                if stored.sum() <= 0:
-                    continue
-                stored = stored / stored.sum(axis=1, keepdims=True)
-                fresh = self.get_allele_transitions_from_known_read_states(a, b)
-                fresh = self.mirror_transition(fresh, normalized=False)
-                fresh = fresh / fresh.sum(axis=1, keepdims=True)
-                # an uninformative transition carries no direction to disagree about
-                if np.allclose(stored, 0.5) or np.allclose(fresh, 0.5):
-                    continue
-                sd, fd = int(stored[0].argmax()), int(fresh[0].argmax())
-                gap = b - a > 1
-                if gap:
-                    n_gap += 1
-                    n_gap_bad += (sd != fd)
-                else:
-                    n_adj += 1
-                    n_adj_bad += (sd != fd)
-                if sd != fd or os.environ.get('LONGHAP_AUDIT_ALL'):
-                    print(self.idx_variant_mapping[a]['POS'], self.idx_variant_mapping[b]['POS'],
-                          a, b, int(gap), sd, fd,
-                          f'{stored[0,0]:.3f}', f'{stored[0,1]:.3f}',
-                          f'{fresh[0,0]:.3f}', f'{fresh[0,1]:.3f}', sep='\t', file=fh)
-        logging.warning(f'AUDIT gapped pairs: {n_gap_bad}/{n_gap} misaligned; '
-                        f'adjacent pairs: {n_adj_bad}/{n_adj} misaligned')
-        print(f'AUDIT gapped pairs: {n_gap_bad}/{n_gap} misaligned; '
-              f'adjacent pairs: {n_adj_bad}/{n_adj} misaligned', flush=True)
 
     def infer_methylation_transitions(self):
         """
@@ -419,7 +214,6 @@ class LongHap:
         logging.info("Performing backtracing")
         # do backtracing
         self.calculate_forward_path_probabilities()
-        self.refine_by_read_consistency()
 
     def write_results(self):
         """
@@ -772,18 +566,6 @@ class LongHap:
     #     return state
 
     @staticmethod
-    def join_support(counts):
-        """
-        Reads behind a candidate join, from the raw transition counts
-        :param counts: 2x2 np.array, counts as returned by
-                        get_allele_transitions_from_known_read_states, i.e. seeded with 1e-20
-        :return: int, number of reads carrying a state at both variants
-        """
-        return int(round(float(np.asarray(counts).sum())))
-
-    _skip_mirror = False
-
-    @staticmethod
     def mirror_transition(t, normalized=True):
         """
         Mirror certain transition to resolve uncertain transition and create symmetric transition matrix
@@ -792,12 +574,6 @@ class LongHap:
         :return: 2x2 np.array, mirrored, symmetric transition matrix
         """
         t = np.array(t, dtype=float, copy=True)
-        if LongHap._skip_mirror:
-            # Leave the two rows as the reads left them.  Mirroring makes each
-            # transition symmetric under flipping both states, which is exactly what
-            # makes the chain local: flip everything downstream and no downstream term
-            # changes, so a junction is decided by its own counts alone.
-            return t
         # # step from alternative allele is more certain than from reference allele
         if (np.abs(np.log(t[0, 0] / t[0, 1])) < np.abs(np.log(t[1, 0] / t[1, 1])) and
                 (t[1, :].max() > 1 or t[0, :].max() <= 1 or normalized) and np.unique(t.argmax(axis=1)).shape[0] > 1):
@@ -1676,6 +1452,7 @@ class LongHap:
         :param n_succeeding: int, number of downstream variants to consider
         """
         # indices of all difficult variants
+        breakpoint()
         vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                    (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]
         p_idx_a = -1
@@ -1706,12 +1483,6 @@ class LongHap:
         Connect phase block by checking if a transition between the last variant of block A and the first variant of
         block B can be established. All variants inbetween will be marked as unphaseable.
         """
-        if self.no_connect_phase_blocks:
-            # Return before anything is touched.  infer_variant_transitions has just
-            # normalised the transition matrix, and the normalisation at the end of
-            # this function only exists to clean up the raw counts it writes, so
-            # leaving now hands the Viterbi exactly what it expects.
-            return
         norm_trans_mat = self.transition_matrix / self.transition_matrix.sum(axis=1, keepdims=True)
         uncertain_transitions = (
             self.get_uncertain_transitions(norm_trans_mat[:, :,
@@ -1745,33 +1516,18 @@ class LongHap:
             idx_b = self.phaseable[idx_b]
             if idx_b < self.num_variants and idx_b_p - idx_a_p > 2:
                 t = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
-                _raw = np.array(t, copy=True)
                 t = self.mirror_transition(t, normalized=False)
 
                 # can connect the blocks
                 # TODO only having the first conditions gives a lower error
-                # Reads carrying a state at both flanking variants.  Without a floor
-                # here a single read joins two blocks, and because mirror_transition
-                # writes exact zeros the Viterbi then treats that join as infinitely
-                # more certain than the read pileup it was built from -- so a wrong
-                # join inverts everything after it and cannot be undone.
-                if (self.join_support(_raw) >= self.min_join_support and
-                        not np.allclose(t / t.sum(axis=1, keepdims=True), 0.5) and
+                if (not np.allclose(t / t.sum(axis=1, keepdims=True), 0.5) and
                         np.allclose(self.transition_matrix[:, :, self.phaseable[idx_b_p - 1]], 0.5)):
                     self.transition_matrix[:, :, idx_a] = t
                     new_unphaseable.extend(c_unphaseable)
                     connected += 1
-                    if os.environ.get('LONGHAP_JOIN_LOG'):
-                        with open(os.environ['LONGHAP_JOIN_LOG'], 'a') as _fh:
-                            _c = np.round(_raw).astype(int)
-                            print(self.chrom, self.idx_variant_mapping[idx_a]['POS'],
-                                  self.idx_variant_mapping[idx_b]['POS'],
-                                  _c[0, 0], _c[0, 1], _c[1, 0], _c[1, 1],
-                                  int(t.argmax(axis=1)[0]), sep='\t', file=_fh)
             elif idx_b_p - idx_a_p == 2 and 0 < idx_a < self.num_variants - 2 and idx_a_p > 0:
                 t1, t2, new_t1, new_t2, t3 = self.update_transition_matrix_considering_adjacent_variants(
-                    self.phaseable[idx_a_p - 1], idx_a, self.phaseable[idx_a_p + 1],
-                    min_cov=self.min_join_support)
+                    self.phaseable[idx_a_p - 1], idx_a, self.phaseable[idx_a_p + 1])
                 new_t1 = new_t1 / new_t1.sum(axis=1, keepdims=True)
                 new_t2 = new_t2 / new_t2.sum(axis=1, keepdims=True)
                 new_t1 = self.mirror_transition(new_t1, normalized=True)
@@ -1799,8 +1555,7 @@ class LongHap:
                 # consider idx_a --> idx_a +1 --> idx_a + 2
                 elif 0 < idx_a < self.num_variants - 3:
                     t1, t2, new_t1, new_t2, t3 = self.update_transition_matrix_considering_adjacent_variants(
-                        idx_a, self.phaseable[idx_a_p + 1], self.phaseable[idx_a_p + 2],
-                        min_cov=self.min_join_support)
+                        idx_a, self.phaseable[idx_a_p + 1], self.phaseable[idx_a_p + 2])
                     new_t1 = new_t1 / new_t1.sum(axis=1, keepdims=True)
                     new_t2 = new_t2 / new_t2.sum(axis=1, keepdims=True)
                     new_t1 = self.mirror_transition(new_t1, normalized=True)
@@ -2002,21 +1757,6 @@ class LongHap:
             #             if next_state is not None and next_state != -1 and str(n + 1) in query_idx_vars:
             #                 self.transition_matrix[state, next_state, n] += 1
         self.accumulate_transitions_from_read_states()
-
-        if os.environ.get('LONGHAP_TRANS_DUMP'):
-            with open(os.environ['LONGHAP_TRANS_DUMP'], 'w') as _fh:
-                print('pos_a', 'pos_b', 't00', 't01', 't10', 't11',
-                      'cov_a0', 'cov_a1', 'cov_b0', 'cov_b1', sep='\t', file=_fh)
-                for _v in range(self.num_variants - 1):
-                    _t = self.transition_matrix[:, :, _v]
-                    if _t.sum() < 1:
-                        continue
-                    print(self.idx_variant_mapping[_v]['POS'],
-                          self.idx_variant_mapping[_v + 1]['POS'],
-                          *[f'{x:.0f}' for x in _t.ravel()],
-                          *[f'{self.allele_coverage[a, b]:.0f}'
-                            for b in (_v, _v + 1) for a in (0, 1)],
-                          sep='\t', file=_fh)
 
         if self.seqtech == 'ont':
             depth = strands.sum(axis=1)  # (2, n_variants)
@@ -2453,12 +2193,6 @@ def read_phasing(args):
                       use_supplementary=args.use_supplementary,
                       supplementary_distance=args.supplementary_distance,
                       min_meth_difference=args.min_meth_difference,
-                      min_join_support=args.min_join_support,
-                      no_connect_phase_blocks=args.no_connect_phase_blocks,
-                      no_mirror_transition=args.no_mirror_transition,
-                      min_transition_margin=args.min_transition_margin,
-                      min_variant_consistency=args.min_variant_consistency,
-                      min_consistency_cov=args.min_consistency_cov,
                       sample=args.sample, llr_thresh=args.llr_thresh, error_rate=args.error_rate,
                       max_meth_distance=args.max_meth_distance,
                       # flank_snv=flank_snv, flank_indel=flank_indel,
@@ -2507,28 +2241,6 @@ def main(argv=None):
                         help='With --use_supplementary, do not link two variants resolved by '
                              'different alignments of one read more than DIST bp apart. '
                              '0 removes the limit [100000]')
-    parser.add_argument('--no_mirror_transition', action='store_true', default=False,
-                        help='Do not mirror the transition matrix rows onto each other, so each '
-                             'transition keeps the uncertainty the reads gave it [False]')
-    parser.add_argument('--no_connect_phase_blocks', action='store_true', default=False,
-                        help='Skip connect_phase_blocks entirely, leaving every block break the '
-                             'Viterbi produced in place. For diagnosing how much of the phasing '
-                             'error comes from block joining [False]')
-    parser.add_argument('--min_variant_consistency', type=float, default=0.0, metavar='F',
-                        help='Two-pass phasing: after a first pass, drop from the Markov chain any '
-                             'variant whose covering reads agree with their assigned haplotype less '
-                             'than this often, bridge the chain across it, and phase again '
-                             '(0 = off, try 0.8-0.95).')
-    parser.add_argument('--min_consistency_cov', type=int, default=5, metavar='N',
-                        help='Minimum number of haplotype-assigned reads at a variant before '
-                             '--min_variant_consistency may judge it.')
-    parser.add_argument('--min_transition_margin', type=float, default=0.0, metavar='F',
-                        help='Break the haplotype block at any transition where the losing direction '
-                             'holds at least this share of the evidence (0 = off, try 0.2-0.35).')
-    parser.add_argument('--min_join_support', type=int, default=1, metavar='N',
-                        help='Minimum number of reads carrying a state at both flanking variants '
-                             'before two phase blocks may be joined. 1 is the current behaviour, '
-                             'i.e. a single read is enough [1]')
     parser.add_argument('--min_meth_difference', type=float, default=0.0, metavar='D',
                         help='Minimum difference between the haplotypes in mean per-read '
                              'methylation log-likelihood ratio for a site to count as '
