@@ -2261,7 +2261,6 @@ def read_phasing(args):
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', action='version', version=__version__)
-
     parser.add_argument('--vcf', help='Input VCF with called variants', required=True)
     parser.add_argument('-b', '--bam', help='Sorted alignment bam', required=True)
     parser.add_argument('-r', '--reference', help='Reference fasta. Must be indexed with samtools faidx',
