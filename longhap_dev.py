@@ -1453,12 +1453,12 @@ class LongHap:
         """
         # indices of all difficult variants
         transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]]
-        low_support_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
-        low_support_variants = (np.isin(self.phaseable, low_support_transitions) |
-                                np.isin(self.phaseable, low_support_transitions + 1))
+        low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
+        low_conf_variants = (np.isin(self.phaseable, low_conf_transitions) |
+                                np.isin(self.phaseable, low_conf_transitions + 1))
         vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                    (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count) |
-                                   low_support_variants)[0]
+                                   low_conf_variants)[0]
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
