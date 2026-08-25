@@ -32,7 +32,7 @@ class LongHap:
                  sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
                  min_base_quality=0, min_mapq=20,
                  use_supplementary=False, supplementary_distance=100000,
-                 min_meth_difference=0.0,
+                 min_meth_difference=0.0, repair_excursions_thresh=0.5,
                  # flank_snv=33, flank_indel=100,
                  seqtech='pacbio'):
         self.chrom = chrom
@@ -46,6 +46,7 @@ class LongHap:
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
         self.llr_thresh = llr_thresh
+        self.repair_excursions_thresh = repair_excursions_thresh
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
@@ -214,6 +215,55 @@ class LongHap:
         logging.info("Performing backtracing")
         # do backtracing
         self.calculate_forward_path_probabilities()
+
+    def repair_excursions(self):
+        """
+        Flip stretches the reads say are inverted.
+
+        A first-order chain scores an inverted stretch only at its two boundaries,
+        so the cost of an excursion does not grow with its length and the Viterbi
+        has no reason to prefer a short one.  This looks at the finished haplotypes
+        through the reads instead: junctions where most spanning reads change their
+        allegiance are excursion boundaries, and flipping the haplotype between
+        consecutive boundaries removes the excursion.
+
+        Junctions between phase blocks are immune because no read spans them, so
+        the ``repair_min_span`` floor removes them.
+        """
+        span, cross = self.excursion_conflicts()
+        if span is None:
+            return 0
+        with np.errstate(invalid='ignore', divide='ignore'):
+            ratio = cross / np.maximum(span, 1)
+        cand = (ratio > self.repair_excursions_thresh) & (span >= self.allele_coverage)
+
+        # one boundary per contiguous run of candidates: the strongest junction
+        boundaries = []
+        j = 0
+        while j < cand.shape[0]:
+            if not cand[j]:
+                j += 1
+                continue
+            k = j
+            while k + 1 < cand.shape[0] and cand[k + 1]:
+                k += 1
+            boundaries.append(j + int(np.argmax(ratio[j:k + 1])))
+            j = k + 1
+        if not boundaries:
+            logging.info('Excursion repair: no boundary passed the threshold')
+            return 0
+
+        mark = np.zeros(self.phaseable.shape[0], dtype=np.int64)
+        for b in boundaries:
+            mark[b + 1] += 1
+        inverted = (np.cumsum(mark) % 2) == 1
+        idx = self.phaseable[inverted]
+        self.haplotypes[:, idx] = self.haplotypes[::-1, idx]
+        logging.info(f'Excursion repair: {len(boundaries)} boundaries, '
+                     f'{int(inverted.sum())} of {self.phaseable.shape[0]} variants flipped')
+        print(f'Excursion repair: {len(boundaries)} boundaries, '
+              f'{int(inverted.sum())} of {self.phaseable.shape[0]} variants flipped', flush=True)
+        return len(boundaries)
 
     def write_results(self):
         """
@@ -1803,8 +1853,6 @@ class LongHap:
                                             end indices for each haplotype block,
                                             and state probabilities at each variants
         """
-        if len(self.block_ends) > 0:
-            self.block_ends = []
         # pick sites that are can be phased
         transition_matrix = self.transition_matrix[:, :, self.phaseable[:-1]]
         delta = np.zeros((2, transition_matrix.shape[2] + 1)) - 1
@@ -1858,6 +1906,95 @@ class LongHap:
         self.delta[:, self.phaseable] = delta
         self.haplotypes[:, self.phaseable] = np.vstack([hap_0, hap_1])
         self.haplotypes = np.where(self.haplotypes[0, :] == self.haplotypes[1, :], -1, self.haplotypes).astype(int)
+
+    def excursion_conflicts(self):
+        """
+        Per junction, how many spanning reads change the haplotype they support.
+
+        ``haplotypes[0, v]`` is the allele index on haplotype 0, and a read state is
+        an allele index, so a read supports haplotype 0 at ``v`` exactly when they
+        match.  Where the phasing is right that support is constant along a read;
+        where an excursion begins or ends it flips.  Counting the flips per
+        junction locates the boundaries of an inverted stretch -- the only places a
+        long excursion is visible, since its interior is internally consistent.
+
+        :return: (np.array, np.array) reads spanning each junction, and of those
+                 the ones that change support across it
+        """
+        n = self.phaseable.shape[0]
+        if n < 2:
+            return None, None
+        pos_of = {int(v): i for i, v in enumerate(self.phaseable)}
+        hap0 = self.haplotypes[0]
+        span = np.zeros(n + 1, dtype=np.int64)      # difference arrays over junctions
+        cross = np.zeros(n + 1, dtype=np.int64)
+        for read, states in self.read_states.items():
+            obs = []
+            for k, st in states.items():
+                if st is None or st == -1:
+                    continue
+                v = int(k)
+                i = pos_of.get(v)
+                if i is None or hap0[v] == -1:
+                    continue
+                obs.append((i, 1 if st == hap0[v] else 0, st))
+            if len(obs) < 4:
+                continue
+            obs.sort()
+            idx = np.fromiter((o[0] for o in obs), dtype=np.int64, count=len(obs))
+            sup = np.fromiter((o[1] for o in obs), dtype=np.int64, count=len(obs))
+            var = self.phaseable[idx]
+            st = np.fromiter((o[2] for o in obs), dtype=np.int64, count=len(obs))
+            left, right, confident = self._read_side_calls(var, sup, st)
+            disagree = (left != right) & confident
+            for t in range(len(obs) - 1):
+                a, b = idx[t], idx[t + 1]
+                if b <= a:
+                    continue
+                span[a] += 1
+                span[b] -= 1
+                if disagree[t]:
+                    cross[a] += 1
+                    cross[b] -= 1
+        return np.cumsum(span)[:n - 1], np.cumsum(cross)[:n - 1]
+
+    def _read_side_calls(self, idx, sup, states):
+        """
+        For each split of one read, which haplotype each side is assigned to.
+
+        ``majority`` is the share of the side's variants matching haplotype 0.
+        ``probabilistic`` reproduces :meth:`calculate_read_haplotype_probs`
+        restricted to each side -- the naive-Bayes read term, the transition term
+        along the side's variants, and the ``delta`` prior at its first variant.
+
+        :return: (np.array, np.array, np.array) left call, right call, and whether
+                 both sides cleared ``llr_thresh`` (always True for majority)
+        """
+        n = len(idx)
+        # if self.repair_read_model != 'probabilistic':
+        #     pre = np.concatenate([[0], np.cumsum(sup)])
+        #     m = np.arange(1, n)
+        #     return (pre[m] / m > 0.5,
+        #             (pre[-1] - pre[m]) / (n - m) > 0.5,
+        #             np.ones(n - 1, dtype=bool))
+
+        e = self.error_rate
+        hap0 = self.haplotypes[0, idx]
+        hap1 = self.haplotypes[1, idx]
+        r0 = np.log(np.where(hap0 == states, 1 - e, e))
+        r1 = np.log(np.where(hap1 == states, 1 - e, e))
+        t = np.maximum(self.transition_matrix, 1e-300)
+        tr0 = np.log(t[self.haplotypes[0, idx[:-1]], self.haplotypes[0, idx[1:]], idx[:-1]])
+        tr1 = np.log(t[self.haplotypes[1, idx[:-1]], self.haplotypes[1, idx[1:]], idx[:-1]])
+        R0, R1 = np.concatenate([[0], np.cumsum(r0)]), np.concatenate([[0], np.cumsum(r1)])
+        T0, T1 = np.concatenate([[0], np.cumsum(tr0)]), np.concatenate([[0], np.cumsum(tr1)])
+        m = np.arange(1, n)
+        l0 = R0[m] + self.delta[0, idx[0]] + T0[m - 1]
+        l1 = R1[m] + self.delta[1, idx[0]] + T1[m - 1]
+        g0 = (R0[-1] - R0[m]) + self.delta[0, idx[m]] + (T0[-1] - T0[m])
+        g1 = (R1[-1] - R1[m]) + self.delta[1, idx[m]] + (T1[-1] - T1[m])
+        confident = (np.abs(l0 - l1) > self.llr_thresh) & (np.abs(g0 - g1) > self.llr_thresh)
+        return l0 > l1, g0 > g1, confident
 
     def write_phased_vcf(self):
         """
@@ -1976,6 +2113,33 @@ class LongHap:
         else:
             prob_0 = prob_1 = np.log(0.5)
         return prob_0, prob_1
+
+    def variant_read_consistency(self, assignments):
+        """
+        For each variant, the share of covering reads whose allele agrees with the
+        haplotype that read was assigned to.  A cleanly phased variant sits near
+        1.0; one whose reads carry no coherent signal sits near 0.5.
+        """
+        hap0 = self.haplotypes[0]
+        agree = np.zeros(self.num_variants)
+        total = np.zeros(self.num_variants)
+        for read, states in self.read_states.items():
+            rh = assignments.get(read)
+            if rh is None:
+                continue
+            for k, st in states.items():
+                if st is None or st == -1:
+                    continue
+                v = int(k)
+                h = hap0[v]
+                if h == -1:
+                    continue
+                total[v] += 1
+                if (st == h) == (rh == 0):
+                    agree[v] += 1
+        with np.errstate(invalid='ignore', divide='ignore'):
+            consistency = np.where(total > 0, agree / np.maximum(total, 1), np.nan)
+        return consistency, total
 
     def haplotag_reads(self):
         """
@@ -2231,36 +2395,38 @@ def read_phasing(args):
         longhap.infer_variant_transitions()
         longhap.infer_methylation_transitions()
         longhap.phase()
+        longhap.repair_excursions()
 
-        contradicting_reads = np.zeros(longhap.num_variants, dtype=int)
-        supporting_reads = np.zeros(longhap.num_variants, dtype=int)
-        for read_name, states in longhap.read_states.items():
-            var_idx = np.array(list(states.keys()), dtype=int)
-            var_states = np.array(list(states.values()), dtype=int)
-            var_idx = var_idx[var_states != -1]
-            var_states = var_states[var_states != -1]
-            if var_states.shape[0] == 0:
-                continue
-            prob_0, prob_1 = longhap.calculate_read_haplotype_probs(read_name)
+        # contradicting_reads = np.zeros(longhap.num_variants, dtype=int)
+        # supporting_reads = np.zeros(longhap.num_variants, dtype=int)
+        # for read_name, states in longhap.read_states.items():
+        #     var_idx = np.array(list(states.keys()), dtype=int)
+        #     var_states = np.array(list(states.values()), dtype=int)
+        #     var_idx = var_idx[var_states != -1]
+        #     var_states = var_states[var_states != -1]
+        #     if var_states.shape[0] == 0:
+        #         continue
+        #     prob_0, prob_1 = longhap.calculate_read_haplotype_probs(read_name)
+        #
+        #     if prob_0 - prob_1 > longhap.llr_thresh:
+        #         inferred_states = longhap.haplotypes[0, var_idx]
+        #         supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+        #         contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
+        #     elif prob_1 - prob_0 > longhap.llr_thresh:
+        #         inferred_states = longhap.haplotypes[1, var_idx]
+        #         supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+        #         contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
+        #
+        # conflicting_variants = \
+        #     np.where((contradicting_reads / (contradicting_reads + supporting_reads + 1))[longhap.phaseable] > 0.5)[0]
+        # conflicting_variants = np.unique(np.concatenate([longhap.phaseable[conflicting_variants],
+        #                                                  longhap.phaseable[conflicting_variants - 1],
+        #                                                  longhap.phaseable[conflicting_variants + 1]]))
+        # # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] -= 1
+        # # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] *= -1
+        # longhap.rephase_difficult_variants(vars_to_rephase=conflicting_variants)
+        # longhap.phase()
 
-            if prob_0 - prob_1 > longhap.llr_thresh:
-                inferred_states = longhap.haplotypes[0, var_idx]
-                supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
-                contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
-            elif prob_1 - prob_0 > longhap.llr_thresh:
-                inferred_states = longhap.haplotypes[1, var_idx]
-                supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
-                contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
-
-        conflicting_variants = \
-            np.where((contradicting_reads / (contradicting_reads + supporting_reads + 1))[longhap.phaseable] > 0.5)[0]
-        conflicting_variants = np.unique(np.concatenate([longhap.phaseable[conflicting_variants],
-                                                         longhap.phaseable[conflicting_variants - 1],
-                                                         longhap.phaseable[conflicting_variants + 1]]))
-        # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] -= 1
-        # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] *= -1
-        longhap.rephase_difficult_variants(vars_to_rephase=conflicting_variants)
-        longhap.phase()
     longhap.write_results()
 
 
