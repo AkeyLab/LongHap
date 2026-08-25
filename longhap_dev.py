@@ -183,15 +183,15 @@ class LongHap:
 
                 if prob_0 - prob_1 > self.llr_thresh:
                     inferred_states = self.haplotypes[0, var_idx]
-                    supporting_reads[var_idx] += (inferred_states == var_states).astype(int)
-                    contradicting_reads[var_idx] += (inferred_states != var_states).astype(int)
+                    supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+                    contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
                 elif prob_1 - prob_0 > self.llr_thresh:
                     inferred_states = self.haplotypes[1, var_idx]
-                    supporting_reads[var_idx] += (inferred_states == var_states).astype(int)
-                    contradicting_reads[var_idx] += (inferred_states != var_states).astype(int)
+                    supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+                    contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
 
             vars_to_rephase = np.where(((1 + contradicting_reads) / (contradicting_reads + supporting_reads + 1))[self.phaseable] > 0.5)[0]
-            self.rephase_difficult_variants(vars_to_rephase=vars_to_rephase)
+            # self.rephase_difficult_variants(vars_to_rephase=vars_to_rephase)
 
             if self.output_allele_coverage is not None:
                 np.savez(self.output_allele_coverage, self.allele_coverage)
@@ -1844,6 +1844,8 @@ class LongHap:
                                             end indices for each haplotype block,
                                             and state probabilities at each variants
         """
+        if len(self.block_ends) > 0:
+            self.block_ends = []
         # pick sites that are can be phased
         transition_matrix = self.transition_matrix[:, :, self.phaseable[:-1]]
         delta = np.zeros((2, transition_matrix.shape[2] + 1)) - 1
