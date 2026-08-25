@@ -1452,8 +1452,14 @@ class LongHap:
         :param n_succeeding: int, number of downstream variants to consider
         """
         # indices of all difficult variants
-        transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]]
-        low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
+        transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].copy()
+        for i in range(transitions.shape[2]):
+            transitions[:, :, i] = self.mirror_transition(transitions[:, :, i],
+                                                                     normalized=False)
+        transitions /= transitions.sum(axis=1, keepdims=True)
+        breakpoint()
+        # low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
+        low_conf_transitions = np.where(transitions.min(axis=1) >= 0.1)[0]
         low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
                                                       self.phaseable[low_conf_transitions + 1]]))
         low_conf = np.isin(self.phaseable, low_conf_variants)
