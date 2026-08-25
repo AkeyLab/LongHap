@@ -160,7 +160,27 @@ class LongHap:
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             self.connect_phase_blocks()
+            self.phase()
             breakpoint()
+            for read_name, states in self.read_states.items():
+                var_idx = np.array(list(states.keys()), dtype=int)
+                var_states = np.array(list(states.values()), dtype=int)
+                var_idx = var_idx[var_states != -1]
+                var_states = var_states[var_states != -1]
+                if var_states.shape[0] == 0:
+                    continue
+                prob_0, prob_1 = self.calculate_read_haplotype_probs(read_name)
+                contradicting_reads = np.zeros(self.num_variants, dtype=int)
+                supporting_reads = np.zeros(self.num_variants, dtype=int)
+                if prob_0 - prob_1 > self.llr_thresh:
+                    inferred_states = self.haplotypes[0, var_idx]
+                    supporting_reads[var_idx] += (inferred_states == var_states).astype(int)
+                    contradicting_reads[var_idx] += (inferred_states != var_states).astype(int)
+                elif prob_1 - prob_0 > self.llr_thresh:
+                    inferred_states = self.haplotypes[1, var_idx]
+                    supporting_reads[var_idx] += (inferred_states == var_states).astype(int)
+                    contradicting_reads[var_idx] += (inferred_states != var_states).astype(int)
+                breakpoint()
 
             if self.output_allele_coverage is not None:
                 np.savez(self.output_allele_coverage, self.allele_coverage)
@@ -1958,6 +1978,30 @@ class LongHap:
             return 2, idx
         else:
             return None, None
+
+    def calculate_read_haplotype_probs(self, read_name):
+        states = np.vstack([(k, v) for k, v in self.read_states[read_name].items()]).astype(int)
+        idx = states[states[:, 1] != -1][:, 0]
+        states = states[states[:, 1] != -1][:, 1]
+        if states.shape[0] > 1:
+            # naive bayes calculator
+            # P(R | H) = P(H | R) x P(R)
+            # --> probability that read comes from haplotype
+            # X = probability of haplotype X given all reads times
+            # the probability of read matching inferred haplotype
+            prob_read = lambda hap: np.log(np.where(self.haplotypes[hap, idx] == states, 1 - self.error_rate,
+                                                    self.error_rate))
+            prob_haplotype = lambda hap: (
+                np.concatenate([[self.delta[hap, idx[0]]],
+                                np.log(self.transition_matrix[self.haplotypes[hap, idx[:-1]],
+                                self.haplotypes[hap, idx[1:]],
+                                idx[:-1]])]))
+            # log(P(R) x P(H|R)) = log(P(R)) + log(P(H|R))
+            prob_0 = (prob_read(0) + prob_haplotype(0)).sum()
+            prob_1 = (prob_read(1) + prob_haplotype(1)).sum()
+        else:
+            prob_0 = prob_1 = np.log(0.5)
+        return prob_0, prob_1
 
     def haplotag_reads(self):
         """
