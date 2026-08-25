@@ -189,7 +189,9 @@ class LongHap:
                     inferred_states = self.haplotypes[1, var_idx]
                     supporting_reads[var_idx] += (inferred_states == var_states).astype(int)
                     contradicting_reads[var_idx] += (inferred_states != var_states).astype(int)
-            breakpoint()
+
+            vars_to_rephase = np.where(((1 + contradicting_reads) / (contradicting_reads + supporting_reads + 1))[self.phaseable] > 0.5)[0]
+            self.rephase_difficult_variants(vars_to_rephase=vars_to_rephase)
 
             if self.output_allele_coverage is not None:
                 np.savez(self.output_allele_coverage, self.allele_coverage)
@@ -1475,7 +1477,8 @@ class LongHap:
         self.get_new_transition_conditional_on_beliefs(beliefs, layer_idx, layer_idx_mapping, n_preceding,
                                                        n_succeeding)
 
-    def rephase_difficult_variants(self, n_preceding=2, n_succeeding=2, normalized=False, damping=0.0):
+    def rephase_difficult_variants(self, n_preceding=2, n_succeeding=2, normalized=False, damping=0.0,
+                                   vars_to_rephase=None):
         """
         Rephase difficult variants considering long-range phase information of adjacent variants upstream and downstream.
         :param n_preceding: int, number of upstream variants to consider
@@ -1491,9 +1494,10 @@ class LongHap:
         # low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
         #                                               self.phaseable[low_conf_transitions + 1]]))
         # low_conf = np.isin(self.phaseable, low_conf_variants)
-        vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
-                                   (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]# |
-                                   # low_conf)[0]
+        if vars_to_rephase is None:
+            vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
+                                       (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]# |
+                                       # low_conf)[0]
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
