@@ -153,13 +153,14 @@ class LongHap:
             self.create_directed_graph_of_heterozygous_variants_from_reads()
 
             logging.info('Rephasing complex variants and variants with low MAC')
-            self.rephase_difficult_variants()
+            vars_to_rephase = self.rephase_difficult_variants()
 
             for i in range(self.transition_matrix.shape[2]):
                 self.transition_matrix[:, :, i] = self.mirror_transition(self.transition_matrix[:, :, i],
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             self.connect_phase_blocks()
+            breakpoint()
 
             if self.output_allele_coverage is not None:
                 np.savez(self.output_allele_coverage, self.allele_coverage)
@@ -894,7 +895,7 @@ class LongHap:
         methylation_probs = defaultdict(list)
         read_variant_states = []
         read_ids = []
-        variant_homopolymer_mapping = {}
+        # variant_homopolymer_mapping = {}
         for read in self.alignments.fetch(self.chrom, start, end + 1):
             # only consider primary alignments
             if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_supplementary or
@@ -918,8 +919,8 @@ class LongHap:
                                                                               query_offset, operation,
                                                                               length, mm_tags, ml_tags)
                 self.prev_methylations[read_name] = ({m_pos: m for m_pos, m in zip(positions, read_methylation)},
-                                                           cigar, read_start, read_end, ref_offset, query_offset,
-                                                           operation, length, mm_tags, ml_tags)
+                                                     cigar, read_start, read_end, ref_offset, query_offset,
+                                                     operation, length, mm_tags, ml_tags)
 
             # get allele states
             read_idx_states = np.zeros(idx_var_b - idx_var_a + 1).astype(int) - 1
@@ -934,7 +935,7 @@ class LongHap:
                     # I think it might still be informative for methylation patterns though
                     cigar = deque(read.cigartuples)
                     # gap_open, gap_extend, indel_rate, mismatch_rate = self.get_adaptive_gap_penalties(cigar)
-                    pos = self.idx_variant_mapping[n]['POS'] - 1
+                    # pos = self.idx_variant_mapping[n]['POS'] - 1
                     read_start = read.reference_start
                     read_sequence = read.query_sequence
                     read_base_qualities = read.query_qualities
@@ -1454,12 +1455,10 @@ class LongHap:
         # indices of all difficult variants
         transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].copy()
         for i in range(transitions.shape[2]):
-            transitions[:, :, i] = self.mirror_transition(transitions[:, :, i],
-                                                                     normalized=False)
+            transitions[:, :, i] = self.mirror_transition(transitions[:, :, i], normalized=False)
         transitions /= transitions.sum(axis=1, keepdims=True)
-        breakpoint()
         # low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
-        low_conf_transitions = np.where(transitions.min(axis=1) >= 0.1)[0]
+        low_conf_transitions = np.where(transitions.min(axis=1).min(axis=0) >= 0.1)[0]
         low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
                                                       self.phaseable[low_conf_transitions + 1]]))
         low_conf = np.isin(self.phaseable, low_conf_variants)
@@ -1489,6 +1488,7 @@ class LongHap:
                                           damping=damping)
             # self.loopy_belief_propagation_sparse(layer_idx, n_preceding, n_succeeding, normalized=False, damping=0.0)
             p_idx_a = last_var
+        return vars_to_rephase
 
     def connect_phase_blocks(self):
         """
