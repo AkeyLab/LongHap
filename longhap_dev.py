@@ -2232,29 +2232,30 @@ def read_phasing(args):
         longhap.infer_methylation_transitions()
         longhap.phase()
 
-        # contradicting_reads = np.zeros(longhap.num_variants, dtype=int)
-        # supporting_reads = np.zeros(longhap.num_variants, dtype=int)
-        # for read_name, states in longhap.read_states.items():
-        #     var_idx = np.array(list(states.keys()), dtype=int)
-        #     var_states = np.array(list(states.values()), dtype=int)
-        #     var_idx = var_idx[var_states != -1]
-        #     var_states = var_states[var_states != -1]
-        #     if var_states.shape[0] == 0:
-        #         continue
-        #     prob_0, prob_1 = longhap.calculate_read_haplotype_probs(read_name)
-        #
-        #     if prob_0 - prob_1 > longhap.llr_thresh:
-        #         inferred_states = longhap.haplotypes[0, var_idx]
-        #         supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
-        #         contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
-        #     elif prob_1 - prob_0 > longhap.llr_thresh:
-        #         inferred_states = longhap.haplotypes[1, var_idx]
-        #         supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
-        #         contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
-        #
-        # vars_to_rephase = \
-        #     np.where(((1 + contradicting_reads) / (contradicting_reads + supporting_reads + 1))[longhap.phaseable] > 0.5)[0]
-        # # self.rephase_difficult_variants(vars_to_rephase=vars_to_rephase)
+        contradicting_reads = np.zeros(longhap.num_variants, dtype=int)
+        supporting_reads = np.zeros(longhap.num_variants, dtype=int)
+        for read_name, states in longhap.read_states.items():
+            var_idx = np.array(list(states.keys()), dtype=int)
+            var_states = np.array(list(states.values()), dtype=int)
+            var_idx = var_idx[var_states != -1]
+            var_states = var_states[var_states != -1]
+            if var_states.shape[0] == 0:
+                continue
+            prob_0, prob_1 = longhap.calculate_read_haplotype_probs(read_name)
+
+            if prob_0 - prob_1 > longhap.llr_thresh:
+                inferred_states = longhap.haplotypes[0, var_idx]
+                supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+                contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
+            elif prob_1 - prob_0 > longhap.llr_thresh:
+                inferred_states = longhap.haplotypes[1, var_idx]
+                supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+                contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
+
+        conflicting_variants = \
+            np.where(((1 + contradicting_reads) / (contradicting_reads + supporting_reads + 1))[longhap.phaseable] > 0.5)[0]
+        breakpoint()
+        # self.rephase_difficult_variants(vars_to_rephase=vars_to_rephase)
     longhap.write_results()
 
 
