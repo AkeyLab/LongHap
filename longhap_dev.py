@@ -153,15 +153,6 @@ class LongHap:
             self.create_directed_graph_of_heterozygous_variants_from_reads()
 
             logging.info('Rephasing complex variants and variants with low MAC')
-            transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].copy()
-            for i in range(transitions.shape[2]):
-                transitions[:, :, i] = self.mirror_transition(transitions[:, :, i], normalized=False)
-            transitions /= transitions.sum(axis=1, keepdims=True)
-            # low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
-            low_conf_transitions = np.where(transitions.min(axis=1).min(axis=0) >= 0.1)[0]
-            low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
-                                                          self.phaseable[low_conf_transitions + 1]]))
-            low_conf = np.isin(self.phaseable, low_conf_variants)
             vars_to_rephase = self.rephase_difficult_variants()
 
             for i in range(self.transition_matrix.shape[2]):
@@ -169,29 +160,6 @@ class LongHap:
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             self.connect_phase_blocks()
-            self.phase()
-            contradicting_reads = np.zeros(self.num_variants, dtype=int)
-            supporting_reads = np.zeros(self.num_variants, dtype=int)
-            for read_name, states in self.read_states.items():
-                var_idx = np.array(list(states.keys()), dtype=int)
-                var_states = np.array(list(states.values()), dtype=int)
-                var_idx = var_idx[var_states != -1]
-                var_states = var_states[var_states != -1]
-                if var_states.shape[0] == 0:
-                    continue
-                prob_0, prob_1 = self.calculate_read_haplotype_probs(read_name)
-
-                if prob_0 - prob_1 > self.llr_thresh:
-                    inferred_states = self.haplotypes[0, var_idx]
-                    supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
-                    contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
-                elif prob_1 - prob_0 > self.llr_thresh:
-                    inferred_states = self.haplotypes[1, var_idx]
-                    supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
-                    contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
-
-            vars_to_rephase = np.where(((1 + contradicting_reads) / (contradicting_reads + supporting_reads + 1))[self.phaseable] > 0.5)[0]
-            # self.rephase_difficult_variants(vars_to_rephase=vars_to_rephase)
 
             if self.output_allele_coverage is not None:
                 np.savez(self.output_allele_coverage, self.allele_coverage)
