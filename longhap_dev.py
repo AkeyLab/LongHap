@@ -153,6 +153,15 @@ class LongHap:
             self.create_directed_graph_of_heterozygous_variants_from_reads()
 
             logging.info('Rephasing complex variants and variants with low MAC')
+            transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].copy()
+            for i in range(transitions.shape[2]):
+                transitions[:, :, i] = self.mirror_transition(transitions[:, :, i], normalized=False)
+            transitions /= transitions.sum(axis=1, keepdims=True)
+            # low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
+            low_conf_transitions = np.where(transitions.min(axis=1).min(axis=0) >= 0.1)[0]
+            low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
+                                                          self.phaseable[low_conf_transitions + 1]]))
+            low_conf = np.isin(self.phaseable, low_conf_variants)
             vars_to_rephase = self.rephase_difficult_variants()
 
             for i in range(self.transition_matrix.shape[2]):
@@ -161,7 +170,8 @@ class LongHap:
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             self.connect_phase_blocks()
             self.phase()
-            breakpoint()
+            contradicting_reads = np.zeros(self.num_variants, dtype=int)
+            supporting_reads = np.zeros(self.num_variants, dtype=int)
             for read_name, states in self.read_states.items():
                 var_idx = np.array(list(states.keys()), dtype=int)
                 var_states = np.array(list(states.values()), dtype=int)
@@ -170,8 +180,7 @@ class LongHap:
                 if var_states.shape[0] == 0:
                     continue
                 prob_0, prob_1 = self.calculate_read_haplotype_probs(read_name)
-                contradicting_reads = np.zeros(self.num_variants, dtype=int)
-                supporting_reads = np.zeros(self.num_variants, dtype=int)
+
                 if prob_0 - prob_1 > self.llr_thresh:
                     inferred_states = self.haplotypes[0, var_idx]
                     supporting_reads[var_idx] += (inferred_states == var_states).astype(int)
@@ -1473,18 +1482,18 @@ class LongHap:
         :param n_succeeding: int, number of downstream variants to consider
         """
         # indices of all difficult variants
-        transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].copy()
-        for i in range(transitions.shape[2]):
-            transitions[:, :, i] = self.mirror_transition(transitions[:, :, i], normalized=False)
-        transitions /= transitions.sum(axis=1, keepdims=True)
-        # low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
-        low_conf_transitions = np.where(transitions.min(axis=1).min(axis=0) >= 0.1)[0]
-        low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
-                                                      self.phaseable[low_conf_transitions + 1]]))
-        low_conf = np.isin(self.phaseable, low_conf_variants)
+        # transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].copy()
+        # for i in range(transitions.shape[2]):
+        #     transitions[:, :, i] = self.mirror_transition(transitions[:, :, i], normalized=False)
+        # transitions /= transitions.sum(axis=1, keepdims=True)
+        # # low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
+        # low_conf_transitions = np.where(transitions.min(axis=1).min(axis=0) >= 0.1)[0]
+        # low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
+        #                                               self.phaseable[low_conf_transitions + 1]]))
+        # low_conf = np.isin(self.phaseable, low_conf_variants)
         vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
-                                   (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count) |
-                                   low_conf)[0]
+                                   (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]# |
+                                   # low_conf)[0]
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
@@ -1497,8 +1506,8 @@ class LongHap:
             # find last difficult variant in consecutive series
             while (last_var + 1 < self.phaseable.shape[0] - n_succeeding - 2 and
                    ((self.variant_type[self.phaseable[last_var + 1]] != 'SNP') or
-                    (self.allele_coverage[:, self.phaseable[last_var + 1]].min() < self.min_allele_count) or
-                    low_conf[last_var + 1])):
+                    (self.allele_coverage[:, self.phaseable[last_var + 1]].min() < self.min_allele_count))):# or
+                    # low_conf[last_var + 1])):
                 last_var += 1
             if last_var > self.phaseable.shape[0] - n_succeeding - 2:
                 continue
