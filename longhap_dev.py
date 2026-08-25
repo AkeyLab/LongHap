@@ -1453,14 +1453,13 @@ class LongHap:
         """
         # indices of all difficult variants
         transitions = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]]
-        low_conf_transitions = np.unique(np.concatenate([self.phaseable[(transitions.min(axis=1) /
-                                                                      transitions.sum(axis=1)).min(axis=0) >= 0.1],
-                                                      self.phaseable[np.where((transitions.min(axis=1) /
-                                                                               transitions.sum(axis=1)).min(axis=0) >= 0.1)[0] + 1]]))
-        low_conf_variants = np.isin(self.phaseable, low_conf_transitions)
+        low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
+        low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
+                                                      self.phaseable[low_conf_transitions + 1]]))
+        low_conf = np.isin(self.phaseable, low_conf_transitions)
         vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                    (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count) |
-                                   low_conf_variants)[0]
+                                   low_conf)[0]
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
@@ -1474,7 +1473,7 @@ class LongHap:
             while (last_var + 1 < self.phaseable.shape[0] - n_succeeding - 2 and
                    ((self.variant_type[self.phaseable[last_var + 1]] != 'SNP') or
                     (self.allele_coverage[:, self.phaseable[last_var + 1]].min() < self.min_allele_count) or
-                    low_conf_variants[last_var + 1])):
+                    low_conf[last_var + 1])):
                 last_var += 1
             if last_var > self.phaseable.shape[0] - n_succeeding - 2:
                 continue
