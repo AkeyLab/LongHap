@@ -2253,8 +2253,9 @@ def read_phasing(args):
                 contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
 
         conflicting_variants = \
-            np.where(((1 + contradicting_reads) / (contradicting_reads + supporting_reads + 1))[longhap.phaseable] > 0.5)[0]
-        breakpoint()
+            np.where((contradicting_reads / (contradicting_reads + supporting_reads + 1))[longhap.phaseable] > 0.5)[0]
+        longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] -= 1
+        longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] *= 1
         # self.rephase_difficult_variants(vars_to_rephase=vars_to_rephase)
     longhap.write_results()
 
