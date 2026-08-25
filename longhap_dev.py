@@ -1473,7 +1473,8 @@ class LongHap:
             # find last difficult variant in consecutive series
             while (last_var + 1 < self.phaseable.shape[0] - n_succeeding - 2 and
                    ((self.variant_type[self.phaseable[last_var + 1]] != 'SNP') or
-                    (self.allele_coverage[:, self.phaseable[last_var + 1]].min() < self.min_allele_count))):
+                    (self.allele_coverage[:, self.phaseable[last_var + 1]].min() < self.min_allele_count) or
+                    low_conf_variants[last_var + 1])):
                 last_var += 1
             if last_var > self.phaseable.shape[0] - n_succeeding - 2:
                 continue
