@@ -2257,6 +2257,7 @@ def read_phasing(args):
         # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] -= 1
         # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] *= -1
         longhap.rephase_difficult_variants(vars_to_rephase=longhap.phaseable[conflicting_variants])
+        longhap.phase()
     longhap.write_results()
 
 
