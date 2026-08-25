@@ -1456,7 +1456,7 @@ class LongHap:
         low_conf_transitions = np.where((transitions.min(axis=1) / transitions.sum(axis=1)).min(axis=0) >= 0.1)[0]
         low_conf_variants = np.unique(np.concatenate([self.phaseable[low_conf_transitions],
                                                       self.phaseable[low_conf_transitions + 1]]))
-        low_conf = np.isin(self.phaseable, low_conf_transitions)
+        low_conf = np.isin(self.phaseable, low_conf_variants)
         vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                    (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count) |
                                    low_conf)[0]
