@@ -189,7 +189,7 @@ class LongHap:
                     inferred_states = self.haplotypes[1, var_idx]
                     supporting_reads[var_idx] += (inferred_states == var_states).astype(int)
                     contradicting_reads[var_idx] += (inferred_states != var_states).astype(int)
-                breakpoint()
+            breakpoint()
 
             if self.output_allele_coverage is not None:
                 np.savez(self.output_allele_coverage, self.allele_coverage)
