@@ -235,7 +235,8 @@ class LongHap:
             return 0
         with np.errstate(invalid='ignore', divide='ignore'):
             ratio = cross / np.maximum(span, 1)
-        cand = (ratio > self.repair_excursions_thresh) & (span >= 20)
+        # cand = (ratio > self.repair_excursions_thresh) & (span >= 20)
+        cand = (ratio == 1) & (span >= 20)
 
         switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
                                names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
@@ -288,7 +289,7 @@ class LongHap:
         for b in boundaries:
             mark[b + 1] += 1
         breakpoint()
-        inverted = (np.cumsum(mark) % 2) == 1
+        inverted = (np.cumsum(mark) % 2) == 0
         idx = self.phaseable[inverted]
         self.haplotypes[:, idx] = self.haplotypes[::-1, idx]
         logging.info(f'Excursion repair: {len(boundaries)} boundaries, '
