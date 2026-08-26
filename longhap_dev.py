@@ -161,6 +161,7 @@ class LongHap:
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             breakpoint()
+            self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
             self.connect_phase_blocks()
 
             if self.output_allele_coverage is not None:
@@ -2397,7 +2398,7 @@ def read_phasing(args):
         longhap.infer_variant_transitions()
         longhap.infer_methylation_transitions()
         longhap.phase()
-        longhap.repair_excursions()
+        # longhap.repair_excursions()
 
         # contradicting_reads = np.zeros(longhap.num_variants, dtype=int)
         # supporting_reads = np.zeros(longhap.num_variants, dtype=int)
