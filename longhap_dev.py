@@ -161,7 +161,7 @@ class LongHap:
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             # breakpoint()
-            # self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
+            self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
             self.connect_phase_blocks()
 
             if self.output_allele_coverage is not None:
