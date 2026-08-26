@@ -235,7 +235,7 @@ class LongHap:
             return 0
         with np.errstate(invalid='ignore', divide='ignore'):
             ratio = cross / np.maximum(span, 1)
-        cand = (ratio > self.repair_excursions_thresh) & (span >= self.allele_coverage)
+        cand = (ratio > self.repair_excursions_thresh) & (span >= self.min_allele_count)
 
         # one boundary per contiguous run of candidates: the strongest junction
         boundaries = []
