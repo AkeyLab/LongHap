@@ -216,6 +216,8 @@ class LongHap:
         # do backtracing
         self.calculate_forward_path_probabilities()
 
+
+
     def repair_excursions(self):
         """
         Flip stretches the reads say are inverted.
@@ -236,6 +238,11 @@ class LongHap:
         with np.errstate(invalid='ignore', divide='ignore'):
             ratio = cross / np.maximum(span, 1)
         cand = (ratio > self.repair_excursions_thresh) & (span >= 4)
+
+        switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
+                               names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
+
+        breakpoint()
 
         # one boundary per contiguous run of candidates: the strongest junction
         boundaries = []
