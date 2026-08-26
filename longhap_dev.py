@@ -1510,6 +1510,7 @@ class LongHap:
         """
         # indices of all difficult variants
         if vars_to_rephase is None:
+            breakpoint()
             vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                        (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count) |
                                        self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7)[0]
