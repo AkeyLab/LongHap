@@ -172,11 +172,11 @@ class LongHap:
             low_conf = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7
             i = 0
             new_unphasebale = []
-            while i < self.num_variants - 1:
+            while i < self.phaseable.shape[0] - 2:
                 if low_conf[i] and self.phaseable[i] < self.num_variants - 1:
                     idx_a = self.phaseable[i]
                     j = i + 1
-                    while low_conf[j]:
+                    while j < self.phaseable.shape[0] - 1 and low_conf[j] and self.phaseable[j] < self.num_variants - 1:
                         j += 1
                     idx_b = self.phaseable[j]
                     t1 = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
@@ -189,10 +189,10 @@ class LongHap:
 
                     if t2.max() > t1.max():
                         self.transition_matrix[:, :, idx_a] = t2
-                        new_unphasebale.append(self.phaseable[i+1, j + 1])
+                        new_unphasebale.append(self.phaseable[i+1: j + 1])
                     elif t1.max() > t2.max() and j - i > 1:
                         self.transition_matrix[:, :, idx_a] = t1
-                        new_unphasebale.append(self.phaseable[i+1, j])
+                        new_unphasebale.append(self.phaseable[i+1: j])
                     i = j
                 else:
                     i += 1
