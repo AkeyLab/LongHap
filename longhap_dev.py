@@ -1949,7 +1949,7 @@ class LongHap:
             disagree = (left != right) & confident
             for t in range(len(obs) - 1):
                 a, b = idx[t], idx[t + 1]
-                if b <= a:
+                if b <= a or not confident[t]:
                     continue
                 span[a] += 1
                 span[b] -= 1
