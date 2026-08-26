@@ -235,7 +235,7 @@ class LongHap:
             return 0
         with np.errstate(invalid='ignore', divide='ignore'):
             ratio = cross / np.maximum(span, 1)
-        cand = (ratio > self.repair_excursions_thresh) & (span >= 4)
+        cand = (ratio > self.repair_excursions_thresh) & (span >= 20)
 
         switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
                                names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
