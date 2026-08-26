@@ -1972,29 +1972,29 @@ class LongHap:
         """
         n = len(idx)
         # if self.repair_read_model != 'probabilistic':
-        #     pre = np.concatenate([[0], np.cumsum(sup)])
-        #     m = np.arange(1, n)
-        #     return (pre[m] / m > 0.5,
-        #             (pre[-1] - pre[m]) / (n - m) > 0.5,
-        #             np.ones(n - 1, dtype=bool))
-
-        e = self.error_rate
-        hap0 = self.haplotypes[0, idx]
-        hap1 = self.haplotypes[1, idx]
-        r0 = np.log(np.where(hap0 == states, 1 - e, e))
-        r1 = np.log(np.where(hap1 == states, 1 - e, e))
-        t = np.maximum(self.transition_matrix, 1e-300)
-        tr0 = np.log(t[self.haplotypes[0, idx[:-1]], self.haplotypes[0, idx[1:]], idx[:-1]])
-        tr1 = np.log(t[self.haplotypes[1, idx[:-1]], self.haplotypes[1, idx[1:]], idx[:-1]])
-        R0, R1 = np.concatenate([[0], np.cumsum(r0)]), np.concatenate([[0], np.cumsum(r1)])
-        T0, T1 = np.concatenate([[0], np.cumsum(tr0)]), np.concatenate([[0], np.cumsum(tr1)])
+        pre = np.concatenate([[0], np.cumsum(sup)])
         m = np.arange(1, n)
-        l0 = R0[m] + self.delta[0, idx[0]] + T0[m - 1]
-        l1 = R1[m] + self.delta[1, idx[0]] + T1[m - 1]
-        g0 = (R0[-1] - R0[m]) + self.delta[0, idx[m]] + (T0[-1] - T0[m])
-        g1 = (R1[-1] - R1[m]) + self.delta[1, idx[m]] + (T1[-1] - T1[m])
-        confident = (np.abs(l0 - l1) > self.llr_thresh) & (np.abs(g0 - g1) > self.llr_thresh)
-        return l0 > l1, g0 > g1, confident
+        return (pre[m] / m > 0.5,
+                (pre[-1] - pre[m]) / (n - m) > 0.5,
+                np.ones(n - 1, dtype=bool))
+
+        # e = self.error_rate
+        # hap0 = self.haplotypes[0, idx]
+        # hap1 = self.haplotypes[1, idx]
+        # r0 = np.log(np.where(hap0 == states, 1 - e, e))
+        # r1 = np.log(np.where(hap1 == states, 1 - e, e))
+        # t = np.maximum(self.transition_matrix, 1e-300)
+        # tr0 = np.log(t[self.haplotypes[0, idx[:-1]], self.haplotypes[0, idx[1:]], idx[:-1]])
+        # tr1 = np.log(t[self.haplotypes[1, idx[:-1]], self.haplotypes[1, idx[1:]], idx[:-1]])
+        # R0, R1 = np.concatenate([[0], np.cumsum(r0)]), np.concatenate([[0], np.cumsum(r1)])
+        # T0, T1 = np.concatenate([[0], np.cumsum(tr0)]), np.concatenate([[0], np.cumsum(tr1)])
+        # m = np.arange(1, n)
+        # l0 = R0[m] + self.delta[0, idx[0]] + T0[m - 1]
+        # l1 = R1[m] + self.delta[1, idx[0]] + T1[m - 1]
+        # g0 = (R0[-1] - R0[m]) + self.delta[0, idx[m]] + (T0[-1] - T0[m])
+        # g1 = (R1[-1] - R1[m]) + self.delta[1, idx[m]] + (T1[-1] - T1[m])
+        # confident = (np.abs(l0 - l1) > self.llr_thresh) & (np.abs(g0 - g1) > self.llr_thresh)
+        # return l0 > l1, g0 > g1, confident
 
     def write_phased_vcf(self):
         """
