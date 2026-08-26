@@ -168,6 +168,38 @@ class LongHap:
                 return df[keep]
 
             true_sw = drop_flips(switches)
+
+            low_conf = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7
+            i = 0
+            new_unphasebale = []
+            while i < self.num_variants - 1:
+                if low_conf[i] and self.phaseable[i] < self.num_variants - 1:
+                    idx_a = self.phaseable[i]
+                    j = i + 1
+                    while low_conf[j]:
+                        j += 1
+                    idx_b = self.phaseable[j]
+                    t1 = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
+                    t1 = self.mirror_transition(t1, normalized=False)
+                    t1 = t1 / t1.sum(axis=1, keepdims=True)
+
+                    t2 = self.get_allele_transitions_from_known_read_states(idx_a, self.phaseable[j + 1])
+                    t2 = self.mirror_transition(t2, normalized=False)
+                    t2 = t2 / t2.sum(axis=1, keepdims=True)
+
+                    if t2.max() > t1.max():
+                        self.transition_matrix[:, :, idx_a] = t2
+                        new_unphasebale.append(self.phaseable[i+1, j + 1])
+                    elif t1.max() > t2.max() and j - i > 1:
+                        self.transition_matrix[:, :, idx_a] = t1
+                        new_unphasebale.append(self.phaseable[i+1, j])
+                    i = j
+                else:
+                    i += 1
+            self.phaseable = self.phaseable[~np.isin(self.phaseable, new_unphasebale)]
+            self.unphaseable = np.unique(np.concatenate([self.unphaseable, new_unphasebale]))
+
+
             breakpoint()
 
         else:
