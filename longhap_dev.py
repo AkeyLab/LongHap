@@ -196,6 +196,7 @@ class LongHap:
                     i = j
                 else:
                     i += 1
+            new_unphasebale = np.concatenate(new_unphasebale)
             self.phaseable = self.phaseable[~np.isin(self.phaseable, new_unphasebale)]
             self.unphaseable = np.unique(np.concatenate([self.unphaseable, new_unphasebale]))
 
