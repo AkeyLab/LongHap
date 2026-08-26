@@ -1512,10 +1512,10 @@ class LongHap:
         if vars_to_rephase is None:
             vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                        (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]
-            breakpoint()
-            # low_conf = np.where(self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7)[0]
-            # vars_to_rephase = np.unique(np.concatenate([vars_to_rephase, self.phaseable[low_conf],
-            #                                             self.phaseable[low_conf + 1]]))
+            low_conf = np.where(self.transition_matrix[:, :,
+                                self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7)[0]
+            vars_to_rephase = np.unique(np.concatenate([vars_to_rephase, self.phaseable[low_conf],
+                                                        self.phaseable[low_conf + 1]]))
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
