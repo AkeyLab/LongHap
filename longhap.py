@@ -894,7 +894,7 @@ class LongHap:
         methylation_probs = defaultdict(list)
         read_variant_states = []
         read_ids = []
-        variant_homopolymer_mapping = {}
+        # variant_homopolymer_mapping = {}
         for read in self.alignments.fetch(self.chrom, start, end + 1):
             # only consider primary alignments
             if (read.is_secondary or read.is_duplicate or read.is_unmapped or read.is_supplementary or
@@ -918,8 +918,8 @@ class LongHap:
                                                                               query_offset, operation,
                                                                               length, mm_tags, ml_tags)
                 self.prev_methylations[read_name] = ({m_pos: m for m_pos, m in zip(positions, read_methylation)},
-                                                           cigar, read_start, read_end, ref_offset, query_offset,
-                                                           operation, length, mm_tags, ml_tags)
+                                                     cigar, read_start, read_end, ref_offset, query_offset,
+                                                     operation, length, mm_tags, ml_tags)
 
             # get allele states
             read_idx_states = np.zeros(idx_var_b - idx_var_a + 1).astype(int) - 1
@@ -934,7 +934,7 @@ class LongHap:
                     # I think it might still be informative for methylation patterns though
                     cigar = deque(read.cigartuples)
                     # gap_open, gap_extend, indel_rate, mismatch_rate = self.get_adaptive_gap_penalties(cigar)
-                    pos = self.idx_variant_mapping[n]['POS'] - 1
+                    # pos = self.idx_variant_mapping[n]['POS'] - 1
                     read_start = read.reference_start
                     read_sequence = read.query_sequence
                     read_base_qualities = read.query_qualities
@@ -1445,15 +1445,17 @@ class LongHap:
         self.get_new_transition_conditional_on_beliefs(beliefs, layer_idx, layer_idx_mapping, n_preceding,
                                                        n_succeeding)
 
-    def rephase_difficult_variants(self, n_preceding=2, n_succeeding=2, normalized=False, damping=0.0):
+    def rephase_difficult_variants(self, n_preceding=2, n_succeeding=2, normalized=False, damping=0.0,
+                                   vars_to_rephase=None):
         """
         Rephase difficult variants considering long-range phase information of adjacent variants upstream and downstream.
         :param n_preceding: int, number of upstream variants to consider
         :param n_succeeding: int, number of downstream variants to consider
         """
         # indices of all difficult variants
-        vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
-                                   (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]
+        if vars_to_rephase is None:
+            vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
+                                       (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
