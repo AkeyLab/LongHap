@@ -149,59 +149,59 @@ class LongHap:
             self.variant_read_mapping = defaultdict(list, json.load(open(self.output_variant_read_mapping, 'r')))
             self.unphaseable = np.load(self.output_unphaseable_variants)['arr_0']
             self.phaseable = self.phaseable[~np.isin(self.phaseable, self.unphaseable)]
-            switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
-                                   names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
-
-            def drop_flips(df):
-                """Keep only true switches: a flip is two raw switch events at adjacent junctions."""
-                df = df.sort_values(['chrom', 'start']).reset_index(drop=True)
-                chrom, start, end = df.chrom.values, df.start.values, df.end.values
-                keep = np.zeros(len(df), dtype=bool)
-                i = 0
-                while i < len(df):
-                    j = i
-                    while j + 1 < len(df) and chrom[j] == chrom[j + 1] and end[j] == start[j + 1]:
-                        j += 1
-                    if (j - i + 1) % 2:  # odd one out is a real switch
-                        keep[j] = True
-                    i = j + 1
-                return df[keep]
-
-            true_sw = drop_flips(switches)
-
-            low_conf = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7
-            i = 0
-            new_unphasebale = []
-            while i < self.phaseable.shape[0] - 2:
-                if low_conf[i] and self.phaseable[i] < self.num_variants - 1:
-                    idx_a = self.phaseable[i]
-                    j = i + 1
-                    while j < self.phaseable.shape[0] - 1 and low_conf[j] and self.phaseable[j] < self.num_variants - 1:
-                        j += 1
-                    idx_b = self.phaseable[j]
-                    t1 = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
-                    t1 = self.mirror_transition(t1, normalized=False)
-                    t1 = t1 / t1.sum(axis=1, keepdims=True)
-
-                    t2 = self.get_allele_transitions_from_known_read_states(idx_a, self.phaseable[j + 1])
-                    t2 = self.mirror_transition(t2, normalized=False)
-                    t2 = t2 / t2.sum(axis=1, keepdims=True)
-
-                    if t2.max() > t1.max():
-                        self.transition_matrix[:, :, idx_a] = t2
-                        new_unphasebale.append(self.phaseable[i+1: j + 1])
-                    elif t1.max() > t2.max() and j - i > 1:
-                        self.transition_matrix[:, :, idx_a] = t1
-                        new_unphasebale.append(self.phaseable[i+1: j])
-                    i = j
-                else:
-                    i += 1
-            new_unphasebale = np.concatenate(new_unphasebale)
-            self.phaseable = self.phaseable[~np.isin(self.phaseable, new_unphasebale)]
-            self.unphaseable = np.unique(np.concatenate([self.unphaseable, new_unphasebale]))
-
-
-            breakpoint()
+            # switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
+            #                        names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
+            #
+            # def drop_flips(df):
+            #     """Keep only true switches: a flip is two raw switch events at adjacent junctions."""
+            #     df = df.sort_values(['chrom', 'start']).reset_index(drop=True)
+            #     chrom, start, end = df.chrom.values, df.start.values, df.end.values
+            #     keep = np.zeros(len(df), dtype=bool)
+            #     i = 0
+            #     while i < len(df):
+            #         j = i
+            #         while j + 1 < len(df) and chrom[j] == chrom[j + 1] and end[j] == start[j + 1]:
+            #             j += 1
+            #         if (j - i + 1) % 2:  # odd one out is a real switch
+            #             keep[j] = True
+            #         i = j + 1
+            #     return df[keep]
+            #
+            # true_sw = drop_flips(switches)
+            #
+            # low_conf = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7
+            # i = 0
+            # new_unphasebale = []
+            # while i < self.phaseable.shape[0] - 2:
+            #     if low_conf[i] and self.phaseable[i] < self.num_variants - 1:
+            #         idx_a = self.phaseable[i]
+            #         j = i + 1
+            #         while j < self.phaseable.shape[0] - 1 and low_conf[j] and self.phaseable[j] < self.num_variants - 1:
+            #             j += 1
+            #         idx_b = self.phaseable[j]
+            #         t1 = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
+            #         t1 = self.mirror_transition(t1, normalized=False)
+            #         t1 = t1 / t1.sum(axis=1, keepdims=True)
+            #
+            #         t2 = self.get_allele_transitions_from_known_read_states(idx_a, self.phaseable[j + 1])
+            #         t2 = self.mirror_transition(t2, normalized=False)
+            #         t2 = t2 / t2.sum(axis=1, keepdims=True)
+            #
+            #         if t2.max() > t1.max():
+            #             self.transition_matrix[:, :, idx_a] = t2
+            #             new_unphasebale.append(self.phaseable[i+1: j + 1])
+            #         elif t1.max() > t2.max() and j - i > 1:
+            #             self.transition_matrix[:, :, idx_a] = t1
+            #             new_unphasebale.append(self.phaseable[i+1: j])
+            #         i = j
+            #     else:
+            #         i += 1
+            # new_unphasebale = np.concatenate(new_unphasebale)
+            # self.phaseable = self.phaseable[~np.isin(self.phaseable, new_unphasebale)]
+            # self.unphaseable = np.unique(np.concatenate([self.unphaseable, new_unphasebale]))
+            #
+            #
+            # breakpoint()
 
         else:
             logging.info('Inferring transition matrix from variant data')
@@ -309,7 +309,7 @@ class LongHap:
         if not boundaries:
             logging.info('Excursion repair: no boundary passed the threshold')
             return 0
-
+        breakpoint()
         mark = np.zeros(self.phaseable.shape[0], dtype=np.int64)
         for b in boundaries:
             mark[b + 1] += 1
@@ -2456,7 +2456,7 @@ def read_phasing(args):
         longhap.infer_variant_transitions()
         longhap.infer_methylation_transitions()
         longhap.phase()
-        # longhap.repair_excursions()
+        longhap.repair_excursions()
 
         # contradicting_reads = np.zeros(longhap.num_variants, dtype=int)
         # supporting_reads = np.zeros(longhap.num_variants, dtype=int)
