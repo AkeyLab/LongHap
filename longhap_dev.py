@@ -32,7 +32,7 @@ class LongHap:
                  sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
                  min_base_quality=0, min_mapq=20,
                  use_supplementary=False, supplementary_distance=100000,
-                 min_meth_difference=0.0, repair_excursions_thresh=0.5,
+                 min_meth_difference=0.0, repair_excursions_thresh=0.7,
                  # flank_snv=33, flank_indel=100,
                  seqtech='pacbio'):
         self.chrom = chrom
