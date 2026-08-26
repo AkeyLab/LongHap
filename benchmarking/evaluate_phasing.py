@@ -276,7 +276,7 @@ class ComparisonResult:
     hamming: int = 0
     diff_genotypes: int = 0
     switch_positions: Optional[List[Tuple[str, int, int]]] = None
-    excursions: Optional[List[Tuple[str, int, int, int, int]]] = None
+    excursions: Optional[List[Tuple[str, int, int, int, int, str]]] = None
     blocks_target: int = 0
     covered_target: int = 0
     blocks_gt: int = 0
@@ -498,7 +498,8 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
                                       int(target.position[block[k][0]]) + 1,
                                       int(target.position[block[j][0]]) + 1,
                                       j - k + 1,
-                                      int(wrong[k])))
+                                      int(wrong[k]),
+                                      str(target.phase_block[block[k][0]])))
             k = j + 1
 
         for k in range(len(block) - 1):
@@ -1496,9 +1497,13 @@ def main(argv):
         write_bed(args.switch_error_bed, within.switch_positions, 'switch')
     if args.excursion_bed:
         with open(args.excursion_bed, 'w') as out:
-            print('#chrom', 'start', 'end', 'n_variants', 'wrong', sep='\t', file=out)
-            for chrom, start, end, n, bad in sorted(within.excursions or []):
-                print(chrom, start, end, n, bad, sep='\t', file=out)
+            # the block is not decoration: stretches alternate wrong/correct only
+            # *within* a block, and a caller with no block column sees consecutive
+            # same-kind rows across a boundary and reads it as a bug
+            print('#chrom', 'start', 'end', 'n_variants', 'wrong', 'block',
+                  sep='\t', file=out)
+            for chrom, start, end, n, bad, blk in sorted(within.excursions or []):
+                print(chrom, start, end, n, bad, blk, sep='\t', file=out)
     if args.junction_error_bed:
         write_bed(args.junction_error_bed, junctions.positions, 'junction')
     if args.new_connection_bed and new_connections is not None:
