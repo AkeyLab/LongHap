@@ -283,11 +283,11 @@ class LongHap:
         if not boundaries:
             logging.info('Excursion repair: no boundary passed the threshold')
             return 0
-        breakpoint()
 
         mark = np.zeros(self.phaseable.shape[0], dtype=np.int64)
         for b in boundaries:
             mark[b + 1] += 1
+        breakpoint()
         inverted = (np.cumsum(mark) % 2) == 1
         idx = self.phaseable[inverted]
         self.haplotypes[:, idx] = self.haplotypes[::-1, idx]
