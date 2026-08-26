@@ -160,8 +160,8 @@ class LongHap:
                 self.transition_matrix[:, :, i] = self.mirror_transition(self.transition_matrix[:, :, i],
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
-            breakpoint()
-            self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
+            # breakpoint()
+            # self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
             self.connect_phase_blocks()
 
             if self.output_allele_coverage is not None:
@@ -1511,7 +1511,8 @@ class LongHap:
         # indices of all difficult variants
         if vars_to_rephase is None:
             vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
-                                       (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]
+                                       (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count) |
+                                       self.transition_matrix[:, :, self.phaseable].max(axis=0).max(axis=0) < 0.7)[0]
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
