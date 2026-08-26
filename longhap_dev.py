@@ -160,6 +160,7 @@ class LongHap:
                 self.transition_matrix[:, :, i] = self.mirror_transition(self.transition_matrix[:, :, i],
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
+            breakpoint()
             self.connect_phase_blocks()
 
             if self.output_allele_coverage is not None:
@@ -216,51 +217,6 @@ class LongHap:
         # do backtracing
         self.calculate_forward_path_probabilities()
 
-
-    def orient_segments(self, cuts, same, cross):
-        """
-        Choose each segment's orientation from the reads spanning into it.
-
-        The parity flip assumes every detected boundary is real: it forces
-        "opposite" at each one, so a single false boundary inverts everything
-        downstream until another cancels it.  Roughly half the detected
-        boundaries are false, which makes that assumption expensive.
-
-        Letting each segment pick its own orientation removes the failure mode --
-        a false boundary settles on "same" and costs nothing.  With reads
-        coupling adjacent segments this is a 1-D Ising chain, solved exactly by
-        the same Viterbi used over variants, one segment per step.  Parity is
-        recovered whenever ``cross`` beats ``same`` at every cut, so this can
-        only match or improve on it.
-
-        :param cuts: list, junction indices splitting one block into segments
-        :param same: np.array, per junction, reads whose allegiance is unchanged
-        :param cross: np.array, per junction, reads whose allegiance flips
-        :return: np.array of bool, per segment, whether to invert it
-        """
-        S = len(cuts) + 1
-        if S == 1:
-            return np.zeros(1, dtype=bool)
-        delta = np.zeros((2, S))
-        phi = np.zeros((2, S), dtype=int)
-        for k, j in enumerate(cuts, start=1):
-            # log1p keeps a junction with 40 supporting reads dominant over one
-            # with 5 without letting a single read decide anything
-            w_same, w_cross = np.log1p(same[j]), np.log1p(cross[j])
-            for cur in (0, 1):
-                cand = [delta[prev, k - 1] + (w_same if prev == cur else w_cross)
-                        for prev in (0, 1)]
-                phi[cur, k] = int(np.argmax(cand))
-                delta[cur, k] = max(cand)
-        flip = np.zeros(S, dtype=int)
-        flip[-1] = int(np.argmax(delta[:, -1]))
-        for k in range(S - 1, 0, -1):
-            flip[k - 1] = phi[flip[k], k]
-        # a block's global orientation is arbitrary; keep the one it came with
-        if flip[0] == 1:
-            flip = 1 - flip
-        return flip.astype(bool)
-
     def repair_excursions(self):
         """
         Flip stretches the reads say are inverted.
@@ -281,38 +237,7 @@ class LongHap:
         with np.errstate(invalid='ignore', divide='ignore'):
             ratio = cross / np.maximum(span, 1)
         # cand = (ratio > self.repair_excursions_thresh) & (span >= 20)
-        cand = (ratio == 1) & (span >= 20)
-
-        switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
-                               names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
-
-        def drop_flips(df):
-            """Keep only true switches: a flip is two raw switch events at adjacent junctions."""
-            df = df.sort_values(['chrom', 'start']).reset_index(drop=True)
-            chrom, start, end = df.chrom.values, df.start.values, df.end.values
-            keep = np.zeros(len(df), dtype=bool)
-            i = 0
-            while i < len(df):
-                j = i
-                while j + 1 < len(df) and chrom[j] == chrom[j + 1] and end[j] == start[j + 1]:
-                    j += 1
-                if (j - i + 1) % 2:  # odd one out is a real switch
-                    keep[j] = True
-                i = j + 1
-            return df[keep]
-
-        true_sw = drop_flips(switches)
-
-        true_sw_idx = np.array(sorted(list(set([self.variant_idx_mapping[f'{pos}_None']['idx'] for pos in true_sw.start.values] + [self.variant_idx_mapping[f'{pos}_None']['idx'] for pos in true_sw.end.values]))))
-
-        cand_idx = self.phaseable[:-1][cand]
-        cand_pos = [self.idx_variant_mapping[i]['POS'] for i in cand_idx]
-
-
-
-        breakpoint()
-
-
+        cand = (ratio == self.repair_excursions_thresh) & (span >= 20)
 
         # one boundary per contiguous run of candidates: the strongest junction
         boundaries = []
@@ -330,27 +255,10 @@ class LongHap:
             logging.info('Excursion repair: no boundary passed the threshold')
             return 0
 
-        n = self.phaseable.shape[0]
-        # Solve per phase block: no read spans a block boundary, so blocks carry
-        # no coupling and each keeps its own frame.
-        starts = [0]
-        for end in self.block_ends:
-            k = int(np.searchsorted(self.phaseable, end))
-            if 0 < k + 1 < n:
-                starts.append(k + 1)
-        starts = sorted(set(starts)) + [n]
-
-        inverted = np.zeros(n, dtype=bool)
-        for lo, hi in zip(starts, starts[1:]):
-            cuts = [b for b in boundaries if lo <= b + 1 < hi]
-            if not cuts:
-                continue
-            flip = self.orient_segments(cuts, span - cross, cross)
-            edges = [lo] + [b + 1 for b in cuts] + [hi]
-            for f, (a, b) in zip(flip, zip(edges, edges[1:])):
-                if f:
-                    inverted[a:b] = True
-
+        mark = np.zeros(self.phaseable.shape[0], dtype=np.int64)
+        for b in boundaries:
+            mark[b + 1] += 1
+        inverted = (np.cumsum(mark) % 2) == 1
         idx = self.phaseable[inverted]
         self.haplotypes[:, idx] = self.haplotypes[::-1, idx]
         logging.info(f'Excursion repair: {len(boundaries)} boundaries, '
