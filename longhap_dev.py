@@ -216,8 +216,6 @@ class LongHap:
         # do backtracing
         self.calculate_forward_path_probabilities()
 
-
-
     def repair_excursions(self):
         """
         Flip stretches the reads say are inverted.
@@ -241,6 +239,24 @@ class LongHap:
 
         switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
                                names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
+
+        def drop_flips(df):
+            """Keep only true switches: a flip is two raw switch events at adjacent junctions."""
+            df = df.sort_values(['chrom', 'start']).reset_index(drop=True)
+            chrom, start, end = df.chrom.values, df.start.values, df.end.values
+            keep = np.zeros(len(df), dtype=bool)
+            i = 0
+            while i < len(df):
+                j = i
+                while j + 1 < len(df) and chrom[j] == chrom[j + 1] and end[j] == start[j + 1]:
+                    j += 1
+                if (j - i + 1) % 2:  # odd one out is a real switch
+                    keep[j] = True
+                i = j + 1
+            return df[keep]
+
+        true_sw = drop_flips(switches)
+
 
         breakpoint()
 
