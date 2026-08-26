@@ -149,6 +149,27 @@ class LongHap:
             self.variant_read_mapping = defaultdict(list, json.load(open(self.output_variant_read_mapping, 'r')))
             self.unphaseable = np.load(self.output_unphaseable_variants)['arr_0']
             self.phaseable = self.phaseable[~np.isin(self.phaseable, self.unphaseable)]
+            switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
+                                   names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
+
+            def drop_flips(df):
+                """Keep only true switches: a flip is two raw switch events at adjacent junctions."""
+                df = df.sort_values(['chrom', 'start']).reset_index(drop=True)
+                chrom, start, end = df.chrom.values, df.start.values, df.end.values
+                keep = np.zeros(len(df), dtype=bool)
+                i = 0
+                while i < len(df):
+                    j = i
+                    while j + 1 < len(df) and chrom[j] == chrom[j + 1] and end[j] == start[j + 1]:
+                        j += 1
+                    if (j - i + 1) % 2:  # odd one out is a real switch
+                        keep[j] = True
+                    i = j + 1
+                return df[keep]
+
+            true_sw = drop_flips(switches)
+            breakpoint()
+
         else:
             logging.info('Inferring transition matrix from variant data')
             self.create_directed_graph_of_heterozygous_variants_from_reads()
@@ -161,7 +182,7 @@ class LongHap:
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
             # breakpoint()
-            self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
+            # self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
             self.connect_phase_blocks()
 
             if self.output_allele_coverage is not None:
@@ -1512,10 +1533,10 @@ class LongHap:
         if vars_to_rephase is None:
             vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                        (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]
-            low_conf = np.where(self.transition_matrix[:, :,
-                                self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7)[0]
-            vars_to_rephase = np.unique(np.concatenate([vars_to_rephase, self.phaseable[low_conf],
-                                                        self.phaseable[low_conf + 1]]))
+            # low_conf = np.where(self.transition_matrix[:, :,
+            #                     self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7)[0]
+            # vars_to_rephase = np.unique(np.concatenate([vars_to_rephase, self.phaseable[low_conf],
+            #                                             self.phaseable[low_conf + 1]]))
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
