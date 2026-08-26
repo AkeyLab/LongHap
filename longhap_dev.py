@@ -32,7 +32,7 @@ class LongHap:
                  sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
                  min_base_quality=0, min_mapq=20,
                  use_supplementary=False, supplementary_distance=100000,
-                 min_meth_difference=0.0, repair_excursions_thresh=0.7,
+                 min_meth_difference=0.0, repair_excursions_thresh=0.9,
                  # flank_snv=33, flank_indel=100,
                  seqtech='pacbio'):
         self.chrom = chrom
@@ -257,8 +257,16 @@ class LongHap:
 
         true_sw = drop_flips(switches)
 
+        true_sw_idx = np.array(sorted(list(set([self.variant_idx_mapping[f'{pos}_None']['idx'] for pos in true_sw.start.values] + [self.variant_idx_mapping[f'{pos}_None']['idx'] for pos in true_sw.end.values]))))
+
+        cand_idx = self.phaseable[:-1][cand]
+        cand_pos = [self.idx_variant_mapping[i]['POS'] for i in cand_idx]
+
+
 
         breakpoint()
+
+
 
         # one boundary per contiguous run of candidates: the strongest junction
         boundaries = []
@@ -275,6 +283,7 @@ class LongHap:
         if not boundaries:
             logging.info('Excursion repair: no boundary passed the threshold')
             return 0
+        breakpoint()
 
         mark = np.zeros(self.phaseable.shape[0], dtype=np.int64)
         for b in boundaries:
