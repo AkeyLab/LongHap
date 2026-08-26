@@ -270,9 +270,13 @@ class ComparisonResult:
     assessed_pairs: int = 0
     switches: int = 0
     switch_flips: Tuple[int, int] = (0, 0)
+    blocks_no_switch: int = 0
+    blocks_no_flip: int = 0
+    blocks_clean: int = 0
     hamming: int = 0
     diff_genotypes: int = 0
     switch_positions: Optional[List[Tuple[str, int, int]]] = None
+    excursions: Optional[List[Tuple[str, int, int, int, int]]] = None
     blocks_target: int = 0
     covered_target: int = 0
     blocks_gt: int = 0
@@ -454,7 +458,7 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
     blocks, blocks_target, blocks_gt = group_blocks(
         overlapping_sites, target, gt, ignore_phase_blocks=ignore_phase_blocks)
 
-    result = ComparisonResult(switch_positions=[])
+    result = ComparisonResult(switch_positions=[], excursions=[])
     for block in blocks.values():
         if len(block) < 2:
             continue
@@ -472,7 +476,30 @@ def evaluate_phasing(overlapping_sites, target, gt, ignore_phase_blocks=False):
         result.switches += hamming(switch_encoding(h0), switch_encoding(h1))
         switches, flips = compute_switch_flips(h0, h1)
         result.switch_flips = (result.switch_flips[0] + switches, result.switch_flips[1] + flips)
+        # blocks are the unit a downstream user actually consumes, so how many
+        # are error-free matters independently of the per-variant rates
+        result.blocks_no_switch += switches == 0
+        result.blocks_no_flip += flips == 0
+        result.blocks_clean += switches == 0 and flips == 0
         result.hamming += min(sum(1 for a in agree if not a), sum(1 for a in agree if a))
+
+        # Wrong stretches, taken on the minority side so they match the Hamming
+        # distance above.  Reconstructing these from the switch BED afterwards
+        # cannot be made exact: a stretch bounded by the start or end of a block
+        # has only one switch beside it, and the BED does not say where blocks
+        # begin.
+        wrong = [not a for a in agree] if sum(agree) * 2 >= len(agree) else list(agree)
+        k = 0
+        while k < len(wrong):
+            j = k
+            while j + 1 < len(wrong) and wrong[j + 1] == wrong[k]:
+                j += 1
+            result.excursions.append((target.chromosome[block[k][0]],
+                                      int(target.position[block[k][0]]) + 1,
+                                      int(target.position[block[j][0]]) + 1,
+                                      j - k + 1,
+                                      int(wrong[k])))
+            k = j + 1
 
         for k in range(len(block) - 1):
             if agree[k] != agree[k + 1]:
@@ -993,6 +1020,16 @@ def report_switches(result, header):
     print_stat('switch error rate', percent(result.switches, result.assessed_pairs))
     print_stat('switch/flip decomposition', '{}/{}'.format(*result.switch_flips))
     print_stat('switch/flip rate', percent(sum(result.switch_flips), result.assessed_pairs))
+    print_stat('blocks assessed', result.intersection_blocks)
+    print_stat('--> without a switch', result.blocks_no_switch)
+    print_stat('--> without a switch [%]',
+               percent(result.blocks_no_switch, result.intersection_blocks))
+    print_stat('--> without a flip', result.blocks_no_flip)
+    print_stat('--> without a flip [%]',
+               percent(result.blocks_no_flip, result.intersection_blocks))
+    print_stat('--> without either', result.blocks_clean)
+    print_stat('--> without either [%]',
+               percent(result.blocks_clean, result.intersection_blocks))
     print_stat('Block-wise Hamming distance', result.hamming)
     print_stat('Block-wise Hamming distance [%]', percent(result.hamming, result.covered_variants))
     print_stat('Different genotypes', result.diff_genotypes)
@@ -1122,7 +1159,9 @@ def switch_columns(prefix, result):
     """The ten switch statistics, named under one section prefix."""
     if result is None:
         keys = ('assessed_pairs', 'switches', 'switch_rate', 'switchflip_switches',
-                'switchflip_flips', 'switchflip_rate', 'hamming', 'hamming_rate',
+                'switchflip_flips', 'switchflip_rate', 'blocks', 'blocks_no_switch',
+                'blocks_no_switch_rate', 'blocks_no_flip', 'blocks_no_flip_rate',
+                'blocks_clean', 'blocks_clean_rate', 'hamming', 'hamming_rate',
                 'diff_genotypes', 'diff_genotypes_rate')
         return {f'{prefix}_{k}': '' for k in keys}
     switches, flips = result.switch_flips
@@ -1133,6 +1172,16 @@ def switch_columns(prefix, result):
         f'{prefix}_switchflip_switches': switches,
         f'{prefix}_switchflip_flips': flips,
         f'{prefix}_switchflip_rate': fraction(switches + flips, result.assessed_pairs),
+        f'{prefix}_blocks': result.intersection_blocks,
+        f'{prefix}_blocks_no_switch': result.blocks_no_switch,
+        f'{prefix}_blocks_no_switch_rate': fraction(result.blocks_no_switch,
+                                                    result.intersection_blocks),
+        f'{prefix}_blocks_no_flip': result.blocks_no_flip,
+        f'{prefix}_blocks_no_flip_rate': fraction(result.blocks_no_flip,
+                                                  result.intersection_blocks),
+        f'{prefix}_blocks_clean': result.blocks_clean,
+        f'{prefix}_blocks_clean_rate': fraction(result.blocks_clean,
+                                                result.intersection_blocks),
         f'{prefix}_hamming': result.hamming,
         f'{prefix}_hamming_rate': fraction(result.hamming, result.covered_variants),
         f'{prefix}_diff_genotypes': result.diff_genotypes,
@@ -1340,6 +1389,12 @@ def main(argv):
                              '(default: %(default)s)')
     parser.add_argument('--switch_error_bed',
                         help='Write within-block switch error intervals to this BED file')
+    parser.add_argument('--excursion_bed',
+                        help='Write every within-block stretch between switch errors to this '
+                             'BED file, as chrom/start/end/variant count/wrong. A block with '
+                             'N switches holds N+1 stretches, alternating; the ones flagged '
+                             'wrong are the minority side, and their sizes sum to the '
+                             'block-wise Hamming distance')
     parser.add_argument('--junction_error_bed',
                         help='Write misoriented block junctions to this BED file')
     parser.add_argument('--new_connection_bed',
@@ -1439,6 +1494,11 @@ def main(argv):
 
     if args.switch_error_bed:
         write_bed(args.switch_error_bed, within.switch_positions, 'switch')
+    if args.excursion_bed:
+        with open(args.excursion_bed, 'w') as out:
+            print('#chrom', 'start', 'end', 'n_variants', 'wrong', sep='\t', file=out)
+            for chrom, start, end, n, bad in sorted(within.excursions or []):
+                print(chrom, start, end, n, bad, sep='\t', file=out)
     if args.junction_error_bed:
         write_bed(args.junction_error_bed, junctions.positions, 'junction')
     if args.new_connection_bed and new_connections is not None:
