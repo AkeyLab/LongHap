@@ -39,6 +39,10 @@ def test_switch_columns_shape_is_the_same_with_and_without_a_result():
         assessed_pairs = 10
         switches = 2
         switch_flips = (1, 1)
+        intersection_blocks = 4
+        blocks_no_switch = 3
+        blocks_no_flip = 2
+        blocks_clean = 1
         hamming = 3
         covered_variants = 11
         diff_genotypes = 0
@@ -50,6 +54,9 @@ def test_switch_columns_shape_is_the_same_with_and_without_a_result():
     assert filled['within_switch_rate'] == 0.2
     assert filled['within_switchflip_switches'] == 1
     assert filled['within_switchflip_rate'] == 0.2
+    assert filled['within_blocks'] == 4
+    assert filled['within_blocks_no_switch_rate'] == 0.75
+    assert filled['within_blocks_clean_rate'] == 0.25
 
 
 def _snp(chrom, pos, gt, ps=1):
