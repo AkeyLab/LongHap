@@ -2,6 +2,7 @@ import glob
 
 configfile: 'config/config.yaml'
 longhap_path = '~/LongHap/longhap.py'
+methphaser_path = '~/methphaser/'
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']
@@ -939,8 +940,10 @@ rule run_methphaser:
         chrom="|".join(autosomes),
         aligner=aligner,
         seq_tech= '|'.join(seq_tech)
+    params:
+        methphaser_path = methphaser_path
     shell:
-        "meth_phaser_parallel -b {input.bam} -r {input.ref} -vc {input.vcf} -g {input.gtf} -o {output} -t {threads}"
+        "{params.methphaser_path}meth_phaser_parallel -b {input.bam} -r {input.ref} -vc {input.vcf} -g {input.gtf} -o {output} -t {threads}"
 
 rule run_methphaser_post_processing:
     input:
@@ -955,7 +958,8 @@ rule run_methphaser_post_processing:
     conda:
         "envs/methphaser.yaml"
     params:
-        bam_prefix=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.primary_aln.{variant_type}"
+        bam_prefix=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.primary_aln.{variant_type}",
+        methphaser_path=methphaser_path
     resources:
         mem_mb=8 * 1024,
         runtime=30
@@ -967,7 +971,7 @@ rule run_methphaser_post_processing:
     threads: 1
     benchmark: base_results_dir + "HG002/deepvariant/{seq_tech}_{aligner}_methphaser_{chrom}_post_processing.{variant_type}.benchmark"
     shell:
-        "meth_phaser_post_processing -ib {input.bam} -if {input.methphaser} -ov {output.vcf} -ob {params.bam_prefix} "
+        "{params.methphaser_path}meth_phaser_post_processing -ib {input.bam} -if {input.methphaser} -ov {output.vcf} -ob {params.bam_prefix} "
         "-vc {input.vcf} -t {threads}; "
         # "if [ ! -f {output.bam} ]; then cp {input.bam} {output.bam}; fi; "
         # "if [ ! -f {output.vcf} ]; then cp {input.vcf} {output.vcf}; fi; "
@@ -976,7 +980,7 @@ rule sort_methphaser:
     input:
         base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_unsorted.vcf.gz"
     output:
-        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_sorted.vcf.gz"
+        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
     resources:
         mem_mb=4 * 1024,
         runtime=30
@@ -988,16 +992,16 @@ rule sort_methphaser:
     shell:
         "bcftools sort -Oz -o {output} {input}"
 
-rule dedup_methphaser:
-    input:
-        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_sorted.vcf.gz"
-    output:
-        base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
-    resources:
-        mem_mb=4 * 1024,
-        runtime=10
-    shell:
-        "./dedup_methphaser_vcf.py {input} {output}"
+# rule dedup_methphaser:
+#     input:
+#         base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased_sorted.vcf.gz"
+#     output:
+#         base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_and_methphaser_phased.vcf.gz"
+#     resources:
+#         mem_mb=4 * 1024,
+#         runtime=10
+#     shell:
+#         "./dedup_methphaser_vcf.py {input} {output}"
 
 def get_params_whatshap_compare(wildcards):
     if wildcards.variant_type == 'snps':
