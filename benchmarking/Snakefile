@@ -844,7 +844,8 @@ rule run_whatshap_haplotag:
         chrom = "|".join(autosomes),
         variant_type='snps|snps_indels',
         aligner=aligner,
-        seq_tech = '|'.join(seq_tech)
+        seq_tech = '|'.join(seq_tech),
+        phasing_method = '|'.join(phasing_methods)
     threads: 1
     benchmark: base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.{phasing_method}_haplotag.benchmark"
     resources:
@@ -909,7 +910,8 @@ rule get_primary_alignments:
         variant_type='snps|snps_indels',
         chrom="|".join(autosomes),
         aligner=aligner,
-        seq_tech= '|'.join(seq_tech)
+        seq_tech= '|'.join(seq_tech),
+        phasing_method='|'.join(phasing_methods)
     benchmark: base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.chr{chrom}.{aligner}.{variant_type}.{phasing_method}_primary_alignments.benchmark"
     params:
         chrom ="chr{chrom}"
