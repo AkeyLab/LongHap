@@ -400,6 +400,7 @@ rule eval_ph_cm_lh_sh:
         summary=longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.custom.tab'),
         genes=longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.genes.tsv'),
         bed=longhap_vcf.replace('.vcf.gz', '.annotated.switch_errors.custom.bed'),
+        anchored=longhap_vcf.replace('.vcf.gz', '.annotated.anchored.tsv'),
     params:
         chrom='chr{chrom}',
         options=lambda wildcards, input: f"--baseline_vcf <(bcftools norm -m -any {input.baseline} | bcftools view -T <(sort -k2n {input.shared_sites}))" if wildcards.tool == 'longhap_meth'  else ''
@@ -412,7 +413,7 @@ rule eval_ph_cm_lh_sh:
         "./evaluate_phasing.py --vcf <(bcftools norm -m -any {input.vcf} | bcftools view -T <(sort -k2n {input.shared_sites})) "
         "--gt_vcf <(bcftools norm -r {params.chrom} -m -any {input.gt}) --annotations {input.exons} "
         "--summary_tsv {output.summary} --gene_tsv {output.genes} --switch_error_bed {output.bed} "
-        "--evaluate_sv --rare_variants {params.options}"
+        "--evaluate_sv --rare_variants --anchored_tsv {output.anchored} {params.options}"
 
 
 def get_switch_errors_omim(wildcards):
