@@ -55,6 +55,7 @@ rule all:
         expand(base_dir + "{sample}/longhap/{tool}_omim_regions_switch_error_counts_complex.bed", sample=samples, tool=tools),
         expand(base_dir + "{sample}/longhap/{tool}_omim_regions_switch_error_counts_rare_complex.bed", sample=samples, tool=tools),
         expand(longhap_vcf.replace('.vcf.gz', '.annotated.evaluation.custom.tab'), sample=samples, chrom=chromosomes, tool=tools),
+        expand(longhap_vcf.replace('.vcf.gz', '.annotated.anchored.tsv'), sample=samples, chrom=chromosomes, tool=tools)
 
 rule window_reference:
     input:
