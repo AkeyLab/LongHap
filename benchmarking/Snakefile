@@ -956,7 +956,7 @@ rule run_methphaser_post_processing:
         tbi=base_results_dir+ "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.vcf.gz.tbi"
     output:
         vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_and_methphaser_phased_unsorted.vcf.gz",
-        bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.primary_aln.{variant_type}.{phasing_method}.chr{chrom}.methtagged.bam"
+        bam=temp(base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.primary_aln.{variant_type}.{phasing_method}.chr{chrom}.methtagged.bam")
     conda:
         "envs/methphaser.yaml"
     params:
