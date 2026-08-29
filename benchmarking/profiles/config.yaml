@@ -20,6 +20,7 @@ groups:
  - run_longphase_phase_indels=PHASE
  - run_whatshap_phase=PHASE
  - run_whatshap_phase_indels=PHASE
+ - normalise_whatshap_ps=PHASE
  - index_phased_vcf=PHASE
  - get_phased_sites=PHASE
  - get_primary_alignments=PHASE
