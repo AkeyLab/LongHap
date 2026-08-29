@@ -761,7 +761,6 @@ rule normalise_whatshap_ps:
         vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased_tmp.vcf.gz",
     output:
         vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
-        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz.tbi",
     conda:
         "envs/methphaser.yaml"
     shell:
@@ -785,7 +784,6 @@ rule normalise_whatshap_ps:
                 }}
                 print
             }}' | bcftools view -Oz -o {output.vcf} -
-        bcftools index -t {output.vcf}
         """
 
 def get_seqtech_longphase(wildcards):
