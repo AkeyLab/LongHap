@@ -761,8 +761,9 @@ rule normalise_whatshap_ps:
         vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased_tmp.vcf.gz",
     output:
         vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
-    conda:
-        "envs/methphaser.yaml"
+    resources:
+        runtime=30,
+        mem_mb=16 * 1024
     shell:
         r"""
         bcftools view {input.vcf} | awk '
