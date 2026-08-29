@@ -2,7 +2,7 @@ import glob
 
 configfile: 'config/config.yaml'
 longhap_path = '~/LongHap/longhap.py'
-methphaser_path = '~/methphaser/' # leave empty to fall back to conda version 0.0.3
+methphaser_path = '~/methphaser/' # leave empty to fall back to conda version 0.0.3. Need to add this directory to path or update methphasing call in meth_phaser_parallel to use methpashing in this directory and conda
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']
