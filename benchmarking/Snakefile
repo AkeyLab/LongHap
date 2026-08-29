@@ -2,7 +2,7 @@ import glob
 
 configfile: 'config/config.yaml'
 longhap_path = '~/LongHap/longhap.py'
-methphaser_path = '~/methphaser/'
+methphaser_path = '~/methphaser/' # leave empty to fall back to conda version 0.0.3
 workdir: config['base_results_dir']
 base_results_dir = config["base_results_dir"]
 data_dir = config['data_dir']
@@ -720,7 +720,7 @@ rule run_whatshap_phase:
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.whatshap_phased.vcf.gz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps.whatshap_phased_tmp.vcf.gz"
     conda:
         "envs/whatshap.yaml"
     wildcard_constraints:
@@ -742,7 +742,7 @@ rule run_whatshap_phase_indels:
         bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
-        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap_phased.vcf.gz"
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_snps_indels.whatshap_phased_tmp.vcf.gz"
     conda:
         "envs/whatshap.yaml"
     wildcard_constraints:
@@ -755,6 +755,38 @@ rule run_whatshap_phase_indels:
         mem_mb=16 * 1024
     shell:
         "whatshap phase --ignore-read-groups -o {output.vcf} --reference={input.ref} {input.vcf} {input.bam}"
+
+rule normalise_whatshap_ps:
+    input:
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased_tmp.vcf.gz",
+    output:
+        vcf=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz",
+        tbi=base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.whatshap_phased.vcf.gz.tbi",
+    conda:
+        "envs/methphaser.yaml"
+    shell:
+        r"""
+        bcftools view {input.vcf} | awk '
+            BEGIN {{ FS = OFS = "\t" }}
+            /^#/ {{ print; next }}
+            {{
+                n = split($9, fmt, ":"); ps = 0
+                for (i = 1; i <= n; i++) if (fmt[i] == "PS") ps = i
+                if (ps) {{
+                    split($10, g, ":")
+                    if (g[1] ~ /\|/) {{
+                        if (!(g[ps] in first)) first[g[ps]] = $2
+                        g[ps] = first[g[ps]]
+                    }} else {{
+                        g[ps] = "."
+                    }}
+                    s = g[1]; for (i = 2; i <= n; i++) s = s ":" g[i]
+                    $10 = s
+                }}
+                print
+            }}' | bcftools view -Oz -o {output.vcf} -
+        bcftools index -t {output.vcf}
+        """
 
 def get_seqtech_longphase(wildcards):
     if 'ont' in wildcards.seq_tech:
