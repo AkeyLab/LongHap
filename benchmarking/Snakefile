@@ -49,7 +49,9 @@ rule all:
                phasing_method=phasing_methods, aligner=aligner, seq_tech=seq_tech),
         expand(base_results_dir + "HG002/deepvariant/deepvariant_hifi_hs1.{aligner}.{seq_tech}.chr{chrom}.filtered_{variant_type}.{phasing_method}_phased.evaluation.{sites}.custom.tab",
                variant_type=['snps', 'snps_indels'], phasing_method=phasing_methods, chrom=autosomes,
-               aligner=aligner,seq_tech=seq_tech, sites=['all_sites', 'shared_sites'])
+               aligner=aligner,seq_tech=seq_tech, sites=['all_sites', 'shared_sites']),
+        expand(base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.methylation.combined.bed.gz",
+               seq_tech=seq_tech, aligner=aligner)
 
 
 rule download_reference_genome:
@@ -435,6 +437,24 @@ rule call_methylations:
         aligner=aligner
     shell:
         "{params.exec} --bam {input.bam} --output-prefix {params.prefix} --threads {threads}"
+
+rule call_methylations_ont:
+    input:
+        bam=base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.bam",
+        ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
+    output:
+        base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
+    envs:
+        "envs/modkit.yaml"
+    threads: 32
+    resources:
+        runtime=120,
+        mem_mb=32 * 1024
+    wildcard_constraints:
+        aligner=aligner,
+        seq_tech='ont_r10.4.1_dorado|ul_ont_r10.4.1_dorado'
+    shell:
+        "modkit pileup {input.bam} {output} --modified-bases 5mC --ref {input.ref} --bgzf -t {threads}"
 
 
 def get_longhap_options(wildcards):
