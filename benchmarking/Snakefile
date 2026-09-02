@@ -444,7 +444,7 @@ rule call_methylations_ont:
         ref=ref_dir + reference_genome_url.split('/')[-1].replace('.fa.gz', ".upper.fa")
     output:
         base_results_dir + "HG002/alignments/{seq_tech}_reads_to_hs1.{aligner}.methylation.combined.bed.gz"
-    envs:
+    conda:
         "envs/modkit.yaml"
     threads: 32
     resources:
