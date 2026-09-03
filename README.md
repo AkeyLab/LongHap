@@ -286,17 +286,17 @@ This will generated a file called `raw.ont.methylation.combined.bed.gz`.
 We benchmarked LongHap and other tools on HG002, using publicly available PacBio HiFi, ONT, and UL-ONT data. We find that LongHap generally outperforms all other tools. LongHap's integration of methylation information yields larger phasing improvements that MethPhaser - a recent tool that attempts to refine the phasing by another tool (e.g., WhatsHap) using methylation information, while also creating little computational overhead. For ONT data, LongPhase usually achieves lower switch error rate  by avoiding to phase "difficult" variants. LongHap's comprehensive embedding of SVs also allows it to phase them with greater accuracy than other tools.
 
 #### PacBio HiFi data (38x coverage, Read length N50: 18 kb)
-LongHap achieves a switch error rate as low as LongPhase (A), while also phasing a larger fraction of sites (B) and achieving longer phase blocks when using methylation information (C). LongHap's also phases more SVs with great accuracy (D).
+LongHap achieves switch and Hamming error rates as low as LongPhase (A & C), while also phasing a larger fraction of sites (B) and achieving longer phase blocks when using methylation information (E). LongHap's also phases more SVs with great accuracy (F).
 
 ![figures/performance_pacbio.png](figures/performance_pacbio.png)
 
 #### ONT R10.4.1 Dorado base calling data (45x coverage, Read length N50: 29 kb)
-LongHap achieves a lower switch error rate than WhatsHap and HapCUT2, but slightly higher than LongPhase (A). However, LongHap phases significantly more variants and achieves longer phase blocks when using methylation information (B - D).
+LongHap achieves a lower switch error rate than and comparable Hamming error rate to WhatsHap and HapCUT2, but slightly higher than LongPhase (A & C). However, LongHap phases significantly more variants (B & F) and achieves longer phase blocks when using methylation information (E).
 
 ![figures/performance_ont.png](figures/performance_ont.png)
 
 #### UL-ONT R10.4.1 Dorado base calling data (44x coverage, Read length N50: 111 kb)
-LongHap achieves a lower switch error rate than WhatsHap and HapCUT2, but higher than LongPhase (A). However, LongHap phases significantly more variants and achieves longer phase blocks when using methylation information (B - D).
+LongHap achieves a lower switch error rate than WhatsHap and HapCUT2, but higher than LongPhase (A), and its Hamming error rate is substantially larger than for other tools (C & D). However, LongHap phases significantly more variants (B & F) and achieves longer phase blocks when using methylation information (E). 
 
 
 ![figures/performance_ulont.png](figures/performance_ulont.png)
