@@ -192,9 +192,9 @@ class LongHap:
                                                             'ratio'], engine='pyarrow', skiprows=7)
             elif self.seqtech == 'ont':
                 self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t', engine='pyarrow',
-                                                     names=['chrom', 'start', 'end', 'coverage',
+                                                     names=['chrom', 'start', 'end', 'coverage', 'score',
                                                             'ratio', 'mod_count', 'unmod_count'],
-                                                     usecols=[0, 1, 2, 4, 10, 11, 12])
+                                                     usecols=[0, 1, 2, 4, 9, 10, 11, 12])
                 self.methylation_calls.loc[:, 'hap'] = '.'
                 self.methylation_calls = self.methylation_calls.loc[:, ['chrom', 'start', 'end', 'score', 'hap',
                                                                         'coverage', 'mod_count', 'unmod_count',
