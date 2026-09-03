@@ -213,7 +213,8 @@ class LongHap:
             self.get_methylation_transitions_helper()
             if len(self.differentially_methylated_sites) > 0:
                 self.differentially_methylated_sites = pd.concat(
-                    self.differentially_methylated_sites).sort_values(['chrom', 'start', 'hap']).drop_duplicates()
+                    self.differentially_methylated_sites).sort_values(
+                    ['chrom', 'start', 'hap', 'junction']).drop_duplicates()
             else:
                 self.differentially_methylated_sites = pd.DataFrame()
         elif self.methylation_calls_f is not None and os.path.isfile(self.output_transition_matrix_meth):
@@ -1036,6 +1037,12 @@ class LongHap:
 
         unassigned = np.where((read_variant_states[:, 0] == -1) & (read_variant_states[:, 1] == -1))[0]
         prev_unassigned = []
+        # Only the last pass of the loop below is kept.  Every pass rescues further
+        # reads into reads_hap1/reads_hap2 and recomputes the per-haplotype
+        # methylation from the enlarged sets, so recording inside the loop wrote each
+        # site once per pass, every copy at a different coverage.  The final pass is
+        # the one computed from all the reads the junction could assign.
+        last_diff_meth_sites = None
 
         while len(unassigned) > 0 and not np.array_equal(unassigned, prev_unassigned):
             meth_hap1 = methylation_probs[reads_hap1].sum(axis=0)
@@ -1083,9 +1090,17 @@ class LongHap:
             methylation_per_read_hap2 = self.get_diff_methylation_sites_per_hap(c_methylation_calls, methylation_probs,
                                                                                 reads_hap2, "hap2")
 
-            self.differentially_methylated_sites.append(pd.concat([methylation_per_read_hap1.iloc[diff_meth],
-                                                                   methylation_per_read_hap2.iloc[diff_meth],
-                                                                   c_methylation_calls.iloc[diff_meth]]))
+            # hap1 and hap2 are seeded from this junction's own anchor, so the labels
+            # carry no meaning outside it: a site that is differentially methylated at
+            # two overlapping junctions can be reported with opposite polarity.
+            # Naming the junction on each row keeps that visible rather than letting
+            # the two mix silently.  The Total row is the unsplit input call and says
+            # nothing about the junction, so it stays unlabelled and collapses to one
+            # row per site.
+            junction = f"{pos_a}-{pos_b}"
+            last_diff_meth_sites = pd.concat([methylation_per_read_hap1.iloc[diff_meth].assign(junction=junction),
+                                              methylation_per_read_hap2.iloc[diff_meth].assign(junction=junction),
+                                              c_methylation_calls.iloc[diff_meth]])
             # calculate probabilities that methylation pattern of read match either haplotype
             p_hap1 = (
                 self.calculate_probability_of_reads_belonging_to_haplotype_based_on_methylation(meth_states_hap1,
@@ -1105,6 +1120,8 @@ class LongHap:
             reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[p_hap2 - p_hap1 > self.llr_thresh]])
             unassigned = np.array(unassigned)[~(p_hap1 - p_hap2 > self.llr_thresh) &
                                               ~(p_hap2 - p_hap1 > self.llr_thresh)]
+        if last_diff_meth_sites is not None:
+            self.differentially_methylated_sites.append(last_diff_meth_sites)
         v_a = self.phaseable[idx_var_a]
         v_a1 = self.phaseable[idx_var_a + 1]
         self.methylation_read_assignments['hap1'].extend([(read_ids[i], (v_a, hap1[0]), (v_a1, hap1[-1]))
