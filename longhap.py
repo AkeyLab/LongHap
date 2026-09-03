@@ -185,10 +185,25 @@ class LongHap:
             if not os.path.isfile(self.methylation_calls_f):
                 logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
                 sys.exit(1)
-            self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
-                                                 names=['chrom', 'start', 'end', 'score', 'hap',
-                                                        'coverage', 'mod_count', 'unmod_count',
-                                                        'ratio'], engine='pyarrow', skiprows=7)
+            if self.seqtech == 'pacbio':
+                self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
+                                                     names=['chrom', 'start', 'end', 'score', 'hap',
+                                                            'coverage', 'mod_count', 'unmod_count',
+                                                            'ratio'], engine='pyarrow', skiprows=7)
+            elif self.seqtech == 'ont':
+                self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t', engine='pyarrow',
+                                                     names=['chrom', 'start', 'end', 'modified_base', 'coverage',
+                                                            'strand', 'thickStart', 'thickEnd', 'itemRgb', 'score',
+                                                            'ratio', 'mod_count', 'unmode_count', 'other_mod',
+                                                            'delete', 'fail', 'diff', 'nocall'])
+                self.methylation_calls.loc[:, 'hap'] = '.'
+                self.methylation_calls = self.methylation_calls.loc[:, ['chrom', 'start', 'end', 'score', 'hap',
+                                                                        'coverage', 'mod_count', 'unmod_count',
+                                                                        'ratio']]
+            else:
+                raise ValueError('Select a valid sequence technology. --pacbio or --ont. '
+                                 'Methylation states should be called with aligned_bam_to_cpg_scores and modkit, '
+                                 'respectively.')
             # get putative differentially methylated sites
             self.methylation_calls = self.methylation_calls[(self.methylation_calls.chrom == self.chrom) &
                                                             (self.methylation_calls.coverage >= 10) &
