@@ -54,7 +54,6 @@ longhap --help
 LongHap's only requirements are Python >= 3.11 with the following packages installed:
 - cyvcf2 >= 0.31.4
 - pysam >= 0.23.3
-- parasail-python >= 1.3.4
 - numpy >= 2.4.1
 - pandas >= 2.3.3
 - pyarrow >= 22.0.0
@@ -62,20 +61,6 @@ LongHap's only requirements are Python >= 3.11 with the following packages insta
 - pyfaidx >= 0.9.0.3
 - tqdm >= 4.67.1
 
-<details>
-<summary>Note for Apple Silicon and other ARM users</summary>
-
-`parasail` publishes no wheel for Apple Silicon
-(`macosx_*_arm64`) or `linux-aarch64`, so pip needs to build it from source on
-those platforms and requires GNU autotools. 
-
-On macOS (Apple Silicon):
-```commandline
-brew install autoconf automake libtool
-```
-
-The github actions CI shows this working on `macos-latest`.
-</details>
 
 ### Exemplary Usage
 
@@ -256,7 +241,7 @@ If `--output_read_assignments` is specified, LongHap will write a TSV file with 
 
 ### Preparation of Inputs
 
-To leverage methylation information for phasing, LongHap also requires methylation calls in the form of a BED file. Currently, LongHap expects the file to be generated with `aligned_bam_to_cpg_scores` from [pb-cpg-tools](https://github.com/PacificBiosciences/pb-CpG-tools), with the first seven rows being skipped as they are comments.
+To leverage methylation information for phasing, LongHap also requires methylation calls in the form of a BED file. For PacBio HiFi data, LongHap expects the file to be generated with `aligned_bam_to_cpg_scores` from [pb-cpg-tools](https://github.com/PacificBiosciences/pb-CpG-tools), with the first seven rows being skipped as they are comments. For ONT and UL-ONT data, LongHap expects this file to be generated with `modkit`. See below for details on how to generate these files.
 
 A VCF file generated with any variant caller of your choice works. We chose to use [DeepVariant](https://github.com/google/deepvariant) to call small variants and [Sniffles2](https://github.com/fritzsedlazeck/Sniffles) to call large variants. We then merged the calls into one VCF file. **For optimal performance, we recommend that the final VCF file is left-aligned and multiallelic sites are merged, using `bcftools norm -m+`.**
 
@@ -266,6 +251,35 @@ samtools fastq -T 'ML,MM' raw.pacbio.bam > raw.pacbio.fastq
 minimap2 -ax map-hifi -y reference.fasta raw.pacbio.fastq
 ```
 The `-y` flag tells minimap2 to retain the tags present in the fastq file. 
+
+#### Generating methylation state calls
+
+For PacBio data, LongHap expects methylation states to be determined with `aligned_bam_to_cpg_scores`. Specifically, we recommend this command:
+
+```commandline
+aligned_bam_to_cpg_scores \
+    --bam raw.pacbio.bam \
+    --output-prefix raw.pacbio.methylation 
+    --threads 16
+```
+
+This will generated a file called `raw.pacbio.methylation.combined.bed.gz`.
+
+For ONT and UL-ON data, LongHap expects methylation states to be determined with `modkit`. Specifically, we recommend this command:
+
+```commandline
+modkit pileup \
+    raw.ont.bam \
+    raw.ont.methylation.combined.bed.gz 
+    --combine-strands \
+    --modified-bases 5mC \
+    --cpg \
+    --ref ref.fa \
+    --bgzf 
+    -t 16
+```
+
+This will generated a file called `raw.ont.methylation.combined.bed.gz`.
 
 ### Comparison to other phasing tools
 
@@ -341,5 +355,6 @@ Minor fixes
 * --sample, --llr_thresh, --error_rate, --max_meth_distance and --min_allele_count_meth are reachable from the CLI
 * dropped the tqdm total that walked the whole chromosome a second time
 * removed unused NestedDict and a duplicated edges.append
+* support modkit methylation state calls for ONT data
 
 Adds tests/, a hermetic pytest suite (112 tests, ~13 s) that builds its own reference, VCF and BAM with pysam and needs no external data. The CIGAR walker is checked against pysam.get_aligned_pairs as an independent oracle.
