@@ -30,7 +30,6 @@ classifiers = [
 dependencies = [
     "cyvcf2>=0.31.4",
     "pysam>=0.23.3",
-    "parasail>=1.3.4",
     "numpy>=2.4.1",
     "pandas>=2.3.3",
     "pyarrow>=22.0.0",
