@@ -194,7 +194,7 @@ class LongHap:
                 self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t', engine='pyarrow',
                                                      names=['chrom', 'start', 'end', 'modified_base', 'coverage',
                                                             'strand', 'thickStart', 'thickEnd', 'itemRgb', 'score',
-                                                            'ratio', 'mod_count', 'unmode_count', 'other_mod',
+                                                            'ratio', 'mod_count', 'unmod_count', 'other_mod',
                                                             'delete', 'fail', 'diff', 'nocall'])
                 self.methylation_calls.loc[:, 'hap'] = '.'
                 self.methylation_calls = self.methylation_calls.loc[:, ['chrom', 'start', 'end', 'score', 'hap',
