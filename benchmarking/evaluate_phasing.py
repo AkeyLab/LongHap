@@ -416,6 +416,7 @@ class SvResult:
     anchor_is_target: int = 0   # connections whose anchor is itself a target
     by_type: Optional[Counter] = None
     positions: Optional[List[Tuple[str, int, int]]] = None
+    per_variant: Optional[List[tuple]] = None
 
     @property
     def error_rate(self):
@@ -663,7 +664,7 @@ def evaluate_anchored(overlapping_sites, target, gt, is_target):
     Reads nothing but position, alleles, genotype, AF and PS, so it applies to any
     phasing tool that writes standard phase sets.
     """
-    result = SvResult(by_type=Counter(), positions=[])
+    result = SvResult(by_type=Counter(), positions=[], per_variant=[])
     # Every target in the call set, phased or not, so the denominator does not move
     # with how much of the call set a given tool managed to phase.
     for i in range(len(target)):
@@ -691,8 +692,19 @@ def evaluate_anchored(overlapping_sites, target, gt, is_target):
                     continue
                 sides.append(anchor)
 
+            def _record(kind, n_conn=0, n_err=0):
+                # one row per target, so two runs can be joined on the variant and
+                # the movement between categories read off directly
+                result.per_variant.append((target.chromosome[i], int(target.position[i]) + 1,
+                                           target.ref[i], target.alt[i],
+                                           target.variant_type[i],
+                                           '' if target.allele_frequency[i] != target.allele_frequency[i]
+                                           else f'{target.allele_frequency[i]:g}',
+                                           kind, n_conn, n_err))
+
             if not sides:
                 result.no_anchor += 1
+                _record('no_anchor')
                 continue
 
             errors = 0
@@ -710,11 +722,15 @@ def evaluate_anchored(overlapping_sites, target, gt, is_target):
 
             if len(sides) == 1:
                 result.one_sided += 1
+                _record('one_sided', len(sides), errors)
             elif errors == 0:
                 result.correct += 1
+                _record('correct', len(sides), errors)
             elif errors == 2:
                 result.flipped += 1
+                _record('flipped', len(sides), errors)
             else:
+                _record('ambiguous', len(sides), errors)
                 # the two anchors disagree with each other, so a switch genuinely lies
                 # between them and the SV's own placement cannot be singled out
                 result.ambiguous += 1
@@ -1438,6 +1454,11 @@ def main(argv):
                              'concatenate. Rates are fractions, empty when undefined.')
     parser.add_argument('--label', default='',
                         help='Free-form run identifier carried in the --summary_tsv row')
+    parser.add_argument('--anchored_tsv',
+                        help='Write one row per SV / rare variant / rare SV with the category it '
+                             'fell into (correct, flipped, ambiguous, one_sided, no_anchor). Two '
+                             'runs can be joined on the variant to see how variants move between '
+                             'categories, which the aggregate counts cannot show')
     parser.add_argument('--gene_tsv',
                         help='With --annotations, write per-gene results to this TSV')
     parser.add_argument('--gene_error_bed',
@@ -1516,6 +1537,14 @@ def main(argv):
         write_bed(args.rare_sv_error_bed, rare_sv.positions, 'rare_sv_connection')
     if args.gene_error_bed and genes is not None:
         write_bed(args.gene_error_bed, genes.positions, 'gene_connection')
+    if args.anchored_tsv:
+        with open(args.anchored_tsv, 'w') as out:
+            print('section', 'chrom', 'pos', 'ref', 'alt', 'variant_type', 'af',
+                  'category', 'connections', 'errors', sep='\t', file=out)
+            for name, res in (('sv', sv), ('rare', rare), ('raresv', rare_sv)):
+                for row in (res.per_variant if res is not None and res.per_variant else []):
+                    print(name, *row, sep='\t', file=out)
+
     if args.gene_tsv and genes is not None:
         with open(args.gene_tsv, 'w') as out:
             print('chrom', 'gene', 'het_sites', 'connections', 'errors', 'unresolved',
