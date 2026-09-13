@@ -12,14 +12,20 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.14"]
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install build dependencies
         run: pip install build
@@ -29,9 +35,13 @@ jobs:
 
       - name: Test pip install from built wheel
         run: |
-          pip install dist/*.whl
+          wheel=$(ls dist/*.whl)
+          pip install "$wheel[test]"   # [test] adds pytest
           longhap --help
           longhap --version
+
+      - name: Run the test suite
+        run: pytest -q
 
       - name: Test pip install - sequence-only phasing
         run: |
@@ -56,35 +66,30 @@ jobs:
             -o example/phased_variants_pip_meth.vcf.gz \
             --verbose
 
-      - name: Test conda install from source
-        uses: conda-incubator/setup-miniconda@v3
+  build_and_publish:
+    needs: test
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write  # attach example.tar.gz to the release
+      id-token: write  # trusted publishing to PyPI
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
         with:
-          activate-environment: longhap
-          environment-file: longhap.yaml
-          conda-remove-defaults: "true"
+          python-version: "3.11"
 
-      - name: Test longhap via conda environment
-        shell: bash -el {0}
-        run: |
-          conda activate longhap
-          ./longhap.py --help
-          ./longhap.py --version
+      - name: Install build dependencies
+        run: pip install build
 
-      - name: Test conda install - sequence-only phasing
-        shell: bash -el {0}
-        run: |
-          conda activate longhap
-          ./longhap.py \
-            --vcf example/deepvariant.vcf.gz \
-            --bam example/pacbio.bam \
-            --reference example/toy_reference.fa \
-            --chrom chr1 \
-            --pacbio \
-            -o example/phased_variants_conda_seq.vcf.gz \
-            --verbose
+      - name: Build package
+        run: python -m build
 
-      - name: Test conda install - sequence and methylation phasing
-        shell: bash -el {0}
+      - name: Attach example data to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           conda activate longhap
           ./longhap.py \

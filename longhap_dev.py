@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = "0.2.0"
+__version__ = "0.1.4"
 import argparse
 import os
 import sys
@@ -32,7 +32,7 @@ class LongHap:
                  sample=None, force=False, max_allele_length=50000, min_allele_count=1, min_allele_count_meth=2,
                  min_base_quality=0, min_mapq=20,
                  use_supplementary=False, supplementary_distance=100000,
-                 min_meth_difference=0.0,
+                 min_meth_difference=0.0, repair_excursions_thresh=0.99,
                  # flank_snv=33, flank_indel=100,
                  seqtech='pacbio'):
         self.chrom = chrom
@@ -46,6 +46,7 @@ class LongHap:
         self.max_meth_distance = max_meth_distance
         self.error_rate = error_rate
         self.llr_thresh = llr_thresh
+        self.repair_excursions_thresh = repair_excursions_thresh
         self.output_vcf = output_vcf
         self.output_blocks = output_blocks
         self.output_bam = output_bam
@@ -148,6 +149,60 @@ class LongHap:
             self.variant_read_mapping = defaultdict(list, json.load(open(self.output_variant_read_mapping, 'r')))
             self.unphaseable = np.load(self.output_unphaseable_variants)['arr_0']
             self.phaseable = self.phaseable[~np.isin(self.phaseable, self.unphaseable)]
+            # switches = pd.read_csv('switch_errors.custom.bed', sep='\t', header=None,
+            #                        names=['chrom', 'start', 'end'], usecols=[0, 1, 2])
+            #
+            # def drop_flips(df):
+            #     """Keep only true switches: a flip is two raw switch events at adjacent junctions."""
+            #     df = df.sort_values(['chrom', 'start']).reset_index(drop=True)
+            #     chrom, start, end = df.chrom.values, df.start.values, df.end.values
+            #     keep = np.zeros(len(df), dtype=bool)
+            #     i = 0
+            #     while i < len(df):
+            #         j = i
+            #         while j + 1 < len(df) and chrom[j] == chrom[j + 1] and end[j] == start[j + 1]:
+            #             j += 1
+            #         if (j - i + 1) % 2:  # odd one out is a real switch
+            #             keep[j] = True
+            #         i = j + 1
+            #     return df[keep]
+            #
+            # true_sw = drop_flips(switches)
+            #
+            # low_conf = self.transition_matrix[:, :, self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7
+            # i = 0
+            # new_unphasebale = []
+            # while i < self.phaseable.shape[0] - 2:
+            #     if low_conf[i] and self.phaseable[i] < self.num_variants - 1:
+            #         idx_a = self.phaseable[i]
+            #         j = i + 1
+            #         while j < self.phaseable.shape[0] - 1 and low_conf[j] and self.phaseable[j] < self.num_variants - 1:
+            #             j += 1
+            #         idx_b = self.phaseable[j]
+            #         t1 = self.get_allele_transitions_from_known_read_states(idx_a, idx_b)
+            #         t1 = self.mirror_transition(t1, normalized=False)
+            #         t1 = t1 / t1.sum(axis=1, keepdims=True)
+            #
+            #         t2 = self.get_allele_transitions_from_known_read_states(idx_a, self.phaseable[j + 1])
+            #         t2 = self.mirror_transition(t2, normalized=False)
+            #         t2 = t2 / t2.sum(axis=1, keepdims=True)
+            #
+            #         if t2.max() > t1.max():
+            #             self.transition_matrix[:, :, idx_a] = t2
+            #             new_unphasebale.append(self.phaseable[i+1: j + 1])
+            #         elif t1.max() > t2.max() and j - i > 1:
+            #             self.transition_matrix[:, :, idx_a] = t1
+            #             new_unphasebale.append(self.phaseable[i+1: j])
+            #         i = j
+            #     else:
+            #         i += 1
+            # new_unphasebale = np.concatenate(new_unphasebale)
+            # self.phaseable = self.phaseable[~np.isin(self.phaseable, new_unphasebale)]
+            # self.unphaseable = np.unique(np.concatenate([self.unphaseable, new_unphasebale]))
+            #
+            #
+            # breakpoint()
+
         else:
             logging.info('Inferring transition matrix from variant data')
             self.create_directed_graph_of_heterozygous_variants_from_reads()
@@ -159,6 +214,8 @@ class LongHap:
                 self.transition_matrix[:, :, i] = self.mirror_transition(self.transition_matrix[:, :, i],
                                                                          normalized=False)
             self.transition_matrix /= self.transition_matrix.sum(axis=1, keepdims=True)
+            # breakpoint()
+            # self.transition_matrix[:, :, self.transition_matrix.max(axis=0).max(axis=0) < 0.7] = 0.5
             self.connect_phase_blocks()
 
             if self.output_allele_coverage is not None:
@@ -185,24 +242,10 @@ class LongHap:
             if not os.path.isfile(self.methylation_calls_f):
                 logging.error(f"Methylation calls file {self.methylation_calls_f} does not exist.")
                 sys.exit(1)
-            if self.seqtech == 'pacbio':
-                self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
-                                                     names=['chrom', 'start', 'end', 'score', 'hap',
-                                                            'coverage', 'mod_count', 'unmod_count',
-                                                            'ratio'], engine='pyarrow', skiprows=7)
-            elif self.seqtech == 'ont':
-                self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t', engine='pyarrow',
-                                                     names=['chrom', 'start', 'end', 'coverage', 'score',
-                                                            'ratio', 'mod_count', 'unmod_count'],
-                                                     usecols=[0, 1, 2, 4, 9, 10, 11, 12])
-                self.methylation_calls.loc[:, 'hap'] = '.'
-                self.methylation_calls = self.methylation_calls.loc[:, ['chrom', 'start', 'end', 'score', 'hap',
-                                                                        'coverage', 'mod_count', 'unmod_count',
-                                                                        'ratio']]
-            else:
-                raise ValueError('Select a valid sequence technology. --pacbio or --ont. '
-                                 'Methylation states should be called with aligned_bam_to_cpg_scores and modkit, '
-                                 'respectively.')
+            self.methylation_calls = pd.read_csv(self.methylation_calls_f, sep='\t',
+                                                 names=['chrom', 'start', 'end', 'score', 'hap',
+                                                        'coverage', 'mod_count', 'unmod_count',
+                                                        'ratio'], engine='pyarrow', skiprows=7)
             # get putative differentially methylated sites
             self.methylation_calls = self.methylation_calls[(self.methylation_calls.chrom == self.chrom) &
                                                             (self.methylation_calls.coverage >= 10) &
@@ -213,8 +256,7 @@ class LongHap:
             self.get_methylation_transitions_helper()
             if len(self.differentially_methylated_sites) > 0:
                 self.differentially_methylated_sites = pd.concat(
-                    self.differentially_methylated_sites).sort_values(
-                    ['chrom', 'start', 'hap', 'junction']).drop_duplicates()
+                    self.differentially_methylated_sites).sort_values(['chrom', 'start', 'hap']).drop_duplicates()
             else:
                 self.differentially_methylated_sites = pd.DataFrame()
         elif self.methylation_calls_f is not None and os.path.isfile(self.output_transition_matrix_meth):
@@ -229,6 +271,56 @@ class LongHap:
         logging.info("Performing backtracing")
         # do backtracing
         self.calculate_forward_path_probabilities()
+
+    def repair_excursions(self):
+        """
+        Flip stretches the reads say are inverted.
+
+        A first-order chain scores an inverted stretch only at its two boundaries,
+        so the cost of an excursion does not grow with its length and the Viterbi
+        has no reason to prefer a short one.  This looks at the finished haplotypes
+        through the reads instead: junctions where most spanning reads change their
+        allegiance are excursion boundaries, and flipping the haplotype between
+        consecutive boundaries removes the excursion.
+
+        Junctions between phase blocks are immune because no read spans them, so
+        the ``repair_min_span`` floor removes them.
+        """
+        span, cross = self.excursion_conflicts()
+        if span is None:
+            return 0
+        with np.errstate(invalid='ignore', divide='ignore'):
+            ratio = cross / np.maximum(span, 1)
+        # cand = (ratio > self.repair_excursions_thresh) & (span >= 20)
+        cand = (ratio > self.repair_excursions_thresh) & (span >= 20)
+
+        # one boundary per contiguous run of candidates: the strongest junction
+        boundaries = []
+        j = 0
+        while j < cand.shape[0]:
+            if not cand[j]:
+                j += 1
+                continue
+            k = j
+            while k + 1 < cand.shape[0] and cand[k + 1]:
+                k += 1
+            boundaries.append(j + int(np.argmax(ratio[j:k + 1])))
+            j = k + 1
+        if not boundaries:
+            logging.info('Excursion repair: no boundary passed the threshold')
+            return 0
+        breakpoint()
+        mark = np.zeros(self.phaseable.shape[0], dtype=np.int64)
+        for b in boundaries:
+            mark[b + 1] += 1
+        inverted = (np.cumsum(mark) % 2) == 1
+        idx = self.phaseable[inverted]
+        self.haplotypes[:, idx] = self.haplotypes[::-1, idx]
+        logging.info(f'Excursion repair: {len(boundaries)} boundaries, '
+                     f'{int(inverted.sum())} of {self.phaseable.shape[0]} variants flipped')
+        print(f'Excursion repair: {len(boundaries)} boundaries, '
+              f'{int(inverted.sum())} of {self.phaseable.shape[0]} variants flipped', flush=True)
+        return len(boundaries)
 
     def write_results(self):
         """
@@ -1037,12 +1129,6 @@ class LongHap:
 
         unassigned = np.where((read_variant_states[:, 0] == -1) & (read_variant_states[:, 1] == -1))[0]
         prev_unassigned = []
-        # Only the last pass of the loop below is kept.  Every pass rescues further
-        # reads into reads_hap1/reads_hap2 and recomputes the per-haplotype
-        # methylation from the enlarged sets, so recording inside the loop wrote each
-        # site once per pass, every copy at a different coverage.  The final pass is
-        # the one computed from all the reads the junction could assign.
-        last_diff_meth_sites = None
 
         while len(unassigned) > 0 and not np.array_equal(unassigned, prev_unassigned):
             meth_hap1 = methylation_probs[reads_hap1].sum(axis=0)
@@ -1090,17 +1176,9 @@ class LongHap:
             methylation_per_read_hap2 = self.get_diff_methylation_sites_per_hap(c_methylation_calls, methylation_probs,
                                                                                 reads_hap2, "hap2")
 
-            # hap1 and hap2 are seeded from this junction's own anchor, so the labels
-            # carry no meaning outside it: a site that is differentially methylated at
-            # two overlapping junctions can be reported with opposite polarity.
-            # Naming the junction on each row keeps that visible rather than letting
-            # the two mix silently.  The Total row is the unsplit input call and says
-            # nothing about the junction, so it stays unlabelled and collapses to one
-            # row per site.
-            junction = f"{pos_a}-{pos_b}"
-            last_diff_meth_sites = pd.concat([methylation_per_read_hap1.iloc[diff_meth].assign(junction=junction),
-                                              methylation_per_read_hap2.iloc[diff_meth].assign(junction=junction),
-                                              c_methylation_calls.iloc[diff_meth]])
+            self.differentially_methylated_sites.append(pd.concat([methylation_per_read_hap1.iloc[diff_meth],
+                                                                   methylation_per_read_hap2.iloc[diff_meth],
+                                                                   c_methylation_calls.iloc[diff_meth]]))
             # calculate probabilities that methylation pattern of read match either haplotype
             p_hap1 = (
                 self.calculate_probability_of_reads_belonging_to_haplotype_based_on_methylation(meth_states_hap1,
@@ -1120,8 +1198,6 @@ class LongHap:
             reads_hap2 = np.concatenate([reads_hap2, np.array(unassigned)[p_hap2 - p_hap1 > self.llr_thresh]])
             unassigned = np.array(unassigned)[~(p_hap1 - p_hap2 > self.llr_thresh) &
                                               ~(p_hap2 - p_hap1 > self.llr_thresh)]
-        if last_diff_meth_sites is not None:
-            self.differentially_methylated_sites.append(last_diff_meth_sites)
         v_a = self.phaseable[idx_var_a]
         v_a1 = self.phaseable[idx_var_a + 1]
         self.methylation_read_assignments['hap1'].extend([(read_ids[i], (v_a, hap1[0]), (v_a1, hap1[-1]))
@@ -1482,11 +1558,18 @@ class LongHap:
         Rephase difficult variants considering long-range phase information of adjacent variants upstream and downstream.
         :param n_preceding: int, number of upstream variants to consider
         :param n_succeeding: int, number of downstream variants to consider
+        :param normalized: boolean, whether transition matrix is normalized or not
+        :param damping: float, damping for loopy belief propagation
+        :param vars_to_rephase: np.array, variant indices to rephase
         """
         # indices of all difficult variants
         if vars_to_rephase is None:
             vars_to_rephase = np.where((self.variant_type[self.phaseable] != 'SNP') |
                                        (self.allele_coverage[:, self.phaseable].min(axis=0) < self.min_allele_count))[0]
+            # low_conf = np.where(self.transition_matrix[:, :,
+            #                     self.phaseable[self.phaseable < self.num_variants - 1]].max(axis=0).max(axis=0) < 0.7)[0]
+            # vars_to_rephase = np.unique(np.concatenate([vars_to_rephase, self.phaseable[low_conf],
+            #                                             self.phaseable[low_conf + 1]]))
         p_idx_a = -1
         # find first difficult variant
         for idx_a in tqdm(vars_to_rephase):
@@ -1885,6 +1968,95 @@ class LongHap:
         self.haplotypes[:, self.phaseable] = np.vstack([hap_0, hap_1])
         self.haplotypes = np.where(self.haplotypes[0, :] == self.haplotypes[1, :], -1, self.haplotypes).astype(int)
 
+    def excursion_conflicts(self):
+        """
+        Per junction, how many spanning reads change the haplotype they support.
+
+        ``haplotypes[0, v]`` is the allele index on haplotype 0, and a read state is
+        an allele index, so a read supports haplotype 0 at ``v`` exactly when they
+        match.  Where the phasing is right that support is constant along a read;
+        where an excursion begins or ends it flips.  Counting the flips per
+        junction locates the boundaries of an inverted stretch -- the only places a
+        long excursion is visible, since its interior is internally consistent.
+
+        :return: (np.array, np.array) reads spanning each junction, and of those
+                 the ones that change support across it
+        """
+        n = self.phaseable.shape[0]
+        if n < 2:
+            return None, None
+        pos_of = {int(v): i for i, v in enumerate(self.phaseable)}
+        hap0 = self.haplotypes[0]
+        span = np.zeros(n + 1, dtype=np.int64)      # difference arrays over junctions
+        cross = np.zeros(n + 1, dtype=np.int64)
+        for read, states in self.read_states.items():
+            obs = []
+            for k, st in states.items():
+                if st is None or st == -1:
+                    continue
+                v = int(k)
+                i = pos_of.get(v)
+                if i is None or hap0[v] == -1:
+                    continue
+                obs.append((i, 1 if st == hap0[v] else 0, st))
+            if len(obs) < 4:
+                continue
+            obs.sort()
+            idx = np.fromiter((o[0] for o in obs), dtype=np.int64, count=len(obs))
+            sup = np.fromiter((o[1] for o in obs), dtype=np.int64, count=len(obs))
+            var = self.phaseable[idx]
+            st = np.fromiter((o[2] for o in obs), dtype=np.int64, count=len(obs))
+            left, right, confident = self._read_side_calls(var, sup, st)
+            disagree = (left != right) & confident
+            for t in range(len(obs) - 1):
+                a, b = idx[t], idx[t + 1]
+                if b <= a or not confident[t]:
+                    continue
+                span[a] += 1
+                span[b] -= 1
+                if disagree[t]:
+                    cross[a] += 1
+                    cross[b] -= 1
+        return np.cumsum(span)[:n - 1], np.cumsum(cross)[:n - 1]
+
+    def _read_side_calls(self, idx, sup, states):
+        """
+        For each split of one read, which haplotype each side is assigned to.
+
+        ``majority`` is the share of the side's variants matching haplotype 0.
+        ``probabilistic`` reproduces :meth:`calculate_read_haplotype_probs`
+        restricted to each side -- the naive-Bayes read term, the transition term
+        along the side's variants, and the ``delta`` prior at its first variant.
+
+        :return: (np.array, np.array, np.array) left call, right call, and whether
+                 both sides cleared ``llr_thresh`` (always True for majority)
+        """
+        n = len(idx)
+        # if self.repair_read_model != 'probabilistic':
+            # pre = np.concatenate([[0], np.cumsum(sup)])
+            # m = np.arange(1, n)
+            # return (pre[m] / m > 0.5,
+            #         (pre[-1] - pre[m]) / (n - m) > 0.5,
+            #         np.ones(n - 1, dtype=bool))
+
+        e = self.error_rate
+        hap0 = self.haplotypes[0, idx]
+        hap1 = self.haplotypes[1, idx]
+        r0 = np.log(np.where(hap0 == states, 1 - e, e))
+        r1 = np.log(np.where(hap1 == states, 1 - e, e))
+        t = np.maximum(self.transition_matrix, 1e-300)
+        tr0 = np.log(t[self.haplotypes[0, idx[:-1]], self.haplotypes[0, idx[1:]], idx[:-1]])
+        tr1 = np.log(t[self.haplotypes[1, idx[:-1]], self.haplotypes[1, idx[1:]], idx[:-1]])
+        R0, R1 = np.concatenate([[0], np.cumsum(r0)]), np.concatenate([[0], np.cumsum(r1)])
+        T0, T1 = np.concatenate([[0], np.cumsum(tr0)]), np.concatenate([[0], np.cumsum(tr1)])
+        m = np.arange(1, n)
+        l0 = R0[m] + self.delta[0, idx[0]] + T0[m - 1]
+        l1 = R1[m] + self.delta[1, idx[0]] + T1[m - 1]
+        g0 = (R0[-1] - R0[m]) + self.delta[0, idx[m]] + (T0[-1] - T0[m])
+        g1 = (R1[-1] - R1[m]) + self.delta[1, idx[m]] + (T1[-1] - T1[m])
+        confident = (np.abs(l0 - l1) > self.llr_thresh) & (np.abs(g0 - g1) > self.llr_thresh)
+        return l0 > l1, g0 > g1, confident
+
     def write_phased_vcf(self):
         """
         Write phased VCF. Only heterozygous variants that we were able to phase will be written with phase information.
@@ -1978,6 +2150,57 @@ class LongHap:
             return 2, idx
         else:
             return None, None
+
+    def calculate_read_haplotype_probs(self, read_name):
+        states = np.vstack([(k, v) for k, v in self.read_states[read_name].items()]).astype(int)
+        idx = states[states[:, 1] != -1][:, 0]
+        states = states[states[:, 1] != -1][:, 1]
+        if states.shape[0] > 1:
+            # naive bayes calculator
+            # P(R | H) = P(H | R) x P(R)
+            # --> probability that read comes from haplotype
+            # X = probability of haplotype X given all reads times
+            # the probability of read matching inferred haplotype
+            prob_read = lambda hap: np.log(np.where(self.haplotypes[hap, idx] == states, 1 - self.error_rate,
+                                                    self.error_rate))
+            prob_haplotype = lambda hap: (
+                np.concatenate([[self.delta[hap, idx[0]]],
+                                np.log(self.transition_matrix[self.haplotypes[hap, idx[:-1]],
+                                self.haplotypes[hap, idx[1:]],
+                                idx[:-1]])]))
+            # log(P(R) x P(H|R)) = log(P(R)) + log(P(H|R))
+            prob_0 = (prob_read(0) + prob_haplotype(0)).sum()
+            prob_1 = (prob_read(1) + prob_haplotype(1)).sum()
+        else:
+            prob_0 = prob_1 = np.log(0.5)
+        return prob_0, prob_1
+
+    def variant_read_consistency(self, assignments):
+        """
+        For each variant, the share of covering reads whose allele agrees with the
+        haplotype that read was assigned to.  A cleanly phased variant sits near
+        1.0; one whose reads carry no coherent signal sits near 0.5.
+        """
+        hap0 = self.haplotypes[0]
+        agree = np.zeros(self.num_variants)
+        total = np.zeros(self.num_variants)
+        for read, states in self.read_states.items():
+            rh = assignments.get(read)
+            if rh is None:
+                continue
+            for k, st in states.items():
+                if st is None or st == -1:
+                    continue
+                v = int(k)
+                h = hap0[v]
+                if h == -1:
+                    continue
+                total[v] += 1
+                if (st == h) == (rh == 0):
+                    agree[v] += 1
+        with np.errstate(invalid='ignore', divide='ignore'):
+            consistency = np.where(total > 0, agree / np.maximum(total, 1), np.nan)
+        return consistency, total
 
     def haplotag_reads(self):
         """
@@ -2233,13 +2456,44 @@ def read_phasing(args):
         longhap.infer_variant_transitions()
         longhap.infer_methylation_transitions()
         longhap.phase()
+        longhap.repair_excursions()
+
+        # contradicting_reads = np.zeros(longhap.num_variants, dtype=int)
+        # supporting_reads = np.zeros(longhap.num_variants, dtype=int)
+        # for read_name, states in longhap.read_states.items():
+        #     var_idx = np.array(list(states.keys()), dtype=int)
+        #     var_states = np.array(list(states.values()), dtype=int)
+        #     var_idx = var_idx[var_states != -1]
+        #     var_states = var_states[var_states != -1]
+        #     if var_states.shape[0] == 0:
+        #         continue
+        #     prob_0, prob_1 = longhap.calculate_read_haplotype_probs(read_name)
+        #
+        #     if prob_0 - prob_1 > longhap.llr_thresh:
+        #         inferred_states = longhap.haplotypes[0, var_idx]
+        #         supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+        #         contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
+        #     elif prob_1 - prob_0 > longhap.llr_thresh:
+        #         inferred_states = longhap.haplotypes[1, var_idx]
+        #         supporting_reads[var_idx] += ((inferred_states == var_states) & (inferred_states != -1)).astype(int)
+        #         contradicting_reads[var_idx] += ((inferred_states != var_states) & (inferred_states != -1)).astype(int)
+        #
+        # conflicting_variants = \
+        #     np.where((contradicting_reads / (contradicting_reads + supporting_reads + 1))[longhap.phaseable] > 0.5)[0]
+        # conflicting_variants = np.unique(np.concatenate([longhap.phaseable[conflicting_variants],
+        #                                                  longhap.phaseable[conflicting_variants - 1],
+        #                                                  longhap.phaseable[conflicting_variants + 1]]))
+        # # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] -= 1
+        # # longhap.haplotypes[:, longhap.phaseable[conflicting_variants]] *= -1
+        # longhap.rephase_difficult_variants(vars_to_rephase=conflicting_variants)
+        # longhap.phase()
+
     longhap.write_results()
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', action='version', version=__version__)
-
     parser.add_argument('--vcf', help='Input VCF with called variants', required=True)
     parser.add_argument('-b', '--bam', help='Sorted alignment bam', required=True)
     parser.add_argument('-r', '--reference', help='Reference fasta. Must be indexed with samtools faidx',
@@ -2262,8 +2516,9 @@ def main(argv=None):
                         help='How many examples of the minor allele must be present in the reads to consider the '
                                 'variant for methylation phasing [2]', type=int, default=2)
     parser.add_argument('--min_base_quality',
-                        help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. [0]',
-                        type=int, default=0)
+                        help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. '
+                             'For HiFi data, all bases should be consider, that is a minimum quality of 0. '
+                             'For ONT data, a threshold of 10 is recommended [0]', type=int, default=0)
     parser.add_argument('--min_mapq', help='Minimum mapping quality to consider a read for phasing [20]',
                         type=int, default=20)
     parser.add_argument('--use_supplementary', action='store_true', default=False,

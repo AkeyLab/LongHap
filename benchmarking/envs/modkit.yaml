@@ -1,0 +1,24 @@
+name: modkit
+channels:
+- conda-forge
+- nanoporetech
+dependencies:
+- _openmp_mutex=4.5=20_gnu
+- binutils_impl_linux-64=2.46.1=default_hfdba357_102
+- gcc_impl_linux-64=16.2.0=h176d5d0_4
+- kernel-headers_linux-64=5.14.0=he073ed8_3
+- ld_impl_linux-64=2.46.1=default_hbd61a6d_102
+- libgcc=16.2.0=ha9f2e26_4
+- libgcc-devel_linux-64=16.2.0=he3ce08f_104
+- libgomp=16.2.0=he0feb66_4
+- libsanitizer=16.2.0=h3048135_4
+- libstdcxx=16.2.0=h934c35e_4
+- libstdcxx-devel_linux-64=16.2.0=h86e191b_104
+- libzlib=1.3.2=h25fd6f3_3
+- modkit=0.6.3=hdcba091_0
+- rust=1.81.0=h1a8d7c4_0
+- rust-std-x86_64-unknown-linux-gnu=1.81.0=h2c6d0dc_0
+- sysroot_linux-64=2.34=h087de78_3
+- tzdata=2026c=h151e31d_0
+- zstd=1.5.7=hb78ec9c_7
+
