@@ -66,14 +66,12 @@ jobs:
             -o example/phased_variants_pip_meth.vcf.gz \
             --verbose
 
-  build_and_publish:
+  build:
     needs: test
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       contents: write  # attach example.tar.gz to the release
-      id-token: write  # trusted publishing to PyPI
     steps:
       - uses: actions/checkout@v6
 
@@ -91,19 +89,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          conda activate longhap
-          ./longhap.py \
-            --vcf example/deepvariant.vcf.gz \
-            --bam example/pacbio.bam \
-            --methylation_calls example/methylation.bed \
-            --reference example/toy_reference.fa \
-            --chrom chr1 \
-            --pacbio \
-            -o example/phased_variants_conda_meth.vcf.gz \
-            --verbose
+          tar -czf example.tar.gz example/
+          gh release upload "${{ github.event.release.tag_name }}" example.tar.gz --clobber
 
       - name: Upload build artifacts
-        if: github.event_name == 'release'
         uses: actions/upload-artifact@v6
         with:
           name: dist
@@ -117,7 +106,6 @@ jobs:
       url: https://pypi.org/p/longhap
     permissions:
       id-token: write
-    if: github.event_name == 'release'
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v8
