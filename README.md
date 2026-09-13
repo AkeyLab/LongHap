@@ -125,9 +125,9 @@ When using ONT data, replace the `--pacbio` flag with `--ont`. When you want to 
 
 By default, we exclude SVs > 50000 bp. This threshold can be adjusted with the `--max_allele_length` flag.
 
-To exclude variants with very low support for the minor allele, use the `--min_allele_count` and `--min_allele_count_meth` flags. By default, these flag are set to 1 and 2, meaning that at least the minor allele for a variant must be supported 1 and 2 reads to be considered for phasing and methylation phasing, respectively.
+To exclude variants with very low support for the minor allele, use the `--min_allele_count` and `--min_allele_count_meth` flags. By default, these flags are set to 1 and 2, meaning that at least the minor allele for a variant must be supported by 1 and 2 reads to be considered for phasing and methylation phasing, respectively.
 
-To exclude bases covering heterozygous variants with a base quality below a certain threshold, use the `--min_base_quality` flag. This is particularly useful when phasing SNPs from ONT data, where low base qualities may indicate systematic errors. By default, this flag is 0 to consider all bases for PacBio HiFi data and 10 for ONT data.
+To exclude bases covering heterozygous variants with a base quality below a certain threshold, use the `--min_base_quality` flag. This is particularly useful when phasing SNPs from ONT data, where low base qualities may indicate systematic errors. By default, this flag is 0.
 
 When phasing a multi-sample VCF, LongHap phases the first sample by default. Use the `--sample` flag to select a different one by name.
 
@@ -135,7 +135,7 @@ The `--llr_thresh` flag sets the log-likelihood ratio threshold used for two dec
 
 The `--error_rate` flag sets the per-base sequencing error rate assumed when haplotagging reads against the inferred haplotypes. The default of 1e-3 suits PacBio HiFi data; a higher value is appropriate for noisier data and makes individual base mismatches count for less when assigning a read.
 
-The `--max_meth_distance` flag sets how far either side of an ambiguous transition LongHap searches the CpG pileup for informative sites, in bp[5000]. Widening it lets the methylation step reach further to bridge a gap, at the cost of runtime and memory, since more candidate sites are scored per transition. Note that methylation can only bridge a junction when reads from*both* sides overlap a shared differentially methylated site, so widening this window does not help across a genuinely read-free gap.
+The `--max_meth_distance` flag sets how far either side of an ambiguous transition LongHap searches the CpG pileup for informative sites, in bp [5000]. Widening it lets the methylation step reach further to bridge a gap, at the cost of runtime and memory, since more candidate sites are scored per transition. Note that methylation can only bridge a junction when reads from*both* sides overlap a shared differentially methylated site, so widening this window does not help across a genuinely read-free gap.
 
 To require more support for the minor allele specifically when methylation information is used, set `--min_allele_count_meth` [2]. This is applied on top of `--min_allele_count` and gates whether a methylation-derived transition is written at all.
 
@@ -160,7 +160,7 @@ options:
                         Chromosome
   -m METHYLATION_CALLS, --methylation_calls METHYLATION_CALLS
                         Methylation calls from pileup model
-  --snvs_only           Whether to phase SNVs only ["False]
+  --snvs_only           Whether to phase SNVs only [False]
   --multiallelics       Also phase multiallelic variants or not [False]
   --ont                 Data is Oxford Nanopore data [False]
   --pacbio              Data is PacBio HiFi data [False]
@@ -168,14 +168,20 @@ options:
                         Maximum length of alleles to consider for phasing in bp [50000]
   --min_allele_count MIN_ALLELE_COUNT
                         How many examples of the minor allele must be present in the reads to consider the variant for phasing [1]
---min_allele_count_meth MIN_ALLELE_COUNT_METH
+  --min_allele_count_meth MIN_ALLELE_COUNT_METH
                         How many examples of the minor allele must be present in the reads to consider the variant for methylation phasing [2]
   --min_base_quality MIN_BASE_QUALITY
                         Minimum base quality to consider a base for phasing. Only affects SNP phasing. For HiFi data, all bases should be consider, that is a minimum quality of 0. For ONT data, a threshold of 10 is recommended
                         [0]
   --min_mapq MIN_MAPQ   Minimum mapping quality to consider a read for phasing [20]
-  --min_allele_count_meth MIN_ALLELE_COUNT_METH
-                        How many examples of the minor allele must be present in the reads to consider the variant for methylation phasing [2]
+  --use_supplementary   Also use supplementary alignments [ignore them]
+  --supplementary_distance DIST
+                        With --use_supplementary, do not link two variants resolved by different alignments of one read more than DIST bp
+                        apart. 0 removes the limit [100000]
+  --min_meth_difference D
+                        Minimum difference between the haplotypes in mean per-read methylation log-likelihood ratio for a site to count as
+                        differentially methylated. Increasing it reduces the error rate of new connections made but drastically reduces
+                        the number of connections made, increasing overall error.0 disables it [0]
   --sample SAMPLE       Sample to phase in a multi-sample VCF [first sample]
   --llr_thresh LLR_THRESH
                         Log-likelihood ratio threshold for determining methylation states, and read haplotagging [3]
@@ -237,7 +243,7 @@ If `--output_blocks` is specified, LongHap will also write the phase block coord
 
 A haplotagged bam file can be requested using `--output_bam`. In the optional haplotagged BAM file, LongHap adds a custom `HP` tag to each read, indicating the haplotype assignment of the read.
 
-If `--output_read_assignments` is specified, LongHap will write a TSV file with the haplotype assignments for each read. The file has three columns: read name, haplotype assignment (1 or 2), and phase block ID.
+If `--output_read_assignments` is specified, LongHap will write a TSV file with the haplotype assignments for each read. The file has three columns: read name, haplotype assignment (H1, H2, or none), and phase block index.
 
 ### Preparation of Inputs
 
@@ -247,7 +253,7 @@ A VCF file generated with any variant caller of your choice works. We chose to u
 
 #### Alignments
 
-For the BAM file, we recommend using [minimap2](https://github.com/lh3/minimap2) to align the reads to the reference genome, but any aligner will do. **If you want to harness methylation information, make sure to use an aligner that preserves the necessary tags, that is, `MM` and `ML` tags.** For exampl, starting from a raw PacBio HiFi BAM file and using minimap2 this can be achieved like this:
+For the BAM file, we recommend using [minimap2](https://github.com/lh3/minimap2) to align the reads to the reference genome, but any aligner will do. **If you want to harness methylation information, make sure to use an aligner that preserves the necessary tags, that is, `MM` and `ML` tags.** For example, starting from a raw PacBio HiFi BAM file and using minimap2 this can be achieved like this:
 ```commandline
 samtools fastq -T 'ML,MM' raw.pacbio.bam > raw.pacbio.fastq
 minimap2 -ax map-hifi -y reference.fasta raw.pacbio.fastq
@@ -261,13 +267,13 @@ To leverage methylation information for phasing, LongHap also requires methylati
 ```commandline
 aligned_bam_to_cpg_scores \
     --bam raw.pacbio.bam \
-    --output-prefix raw.pacbio.methylation 
+    --output-prefix raw.pacbio.methylation \
     --threads 16
 ```
 
-This will generated a file called `raw.pacbio.methylation.combined.bed.gz`.
+This will generate a file called `raw.pacbio.methylation.combined.bed.gz`.
 
-For ONT and UL-ON data, LongHap expects methylation states to be determined with `modkit`. Specifically, we recommend this command:
+For ONT and UL-ONT data, LongHap expects methylation states to be determined with `modkit`. Specifically, we recommend this command:
 
 ```commandline
 modkit pileup \
@@ -277,18 +283,18 @@ modkit pileup \
     --modified-bases 5mC \
     --cpg \
     --ref ref.fa \
-    --bgzf 
+    --bgzf \
     -t 16
 ```
 
-This will generated a file called `raw.ont.methylation.combined.bed.gz`.
+This will generate a file called `raw.ont.methylation.combined.bed.gz`.
 
 ### Comparison to other phasing tools
 
-We benchmarked LongHap and other tools on HG002, using publicly available PacBio HiFi, ONT, and UL-ONT data. We find that LongHap generally outperforms all other tools. LongHap's integration of methylation information yields larger phasing improvements that MethPhaser - a recent tool that attempts to refine the phasing by another tool (e.g., WhatsHap) using methylation information, while also creating little computational overhead. For ONT data, LongPhase usually achieves lower switch error rate  by avoiding to phase "difficult" variants. LongHap's comprehensive embedding of SVs also allows it to phase them with greater accuracy than other tools.
+We benchmarked LongHap and other tools on HG002, using publicly available PacBio HiFi, ONT, and UL-ONT data. We find that LongHap generally outperforms all other tools. LongHap's integration of methylation information yields larger phasing improvements than MethPhaser - a recent tool that attempts to refine the phasing by another tool (e.g., WhatsHap) using methylation information, while also creating little computational overhead. For ONT data, LongPhase usually achieves lower switch error rate  by avoiding to phase "difficult" variants. LongHap's comprehensive embedding of SVs also allows it to phase them with greater accuracy than other tools.
 
 #### PacBio HiFi data (38x coverage, Read length N50: 18 kb)
-LongHap achieves switch and Hamming error rates as low as LongPhase (A & C), while also phasing a larger fraction of sites (B) and achieving longer phase blocks when using methylation information (E). LongHap's also phases more SVs with great accuracy (F).
+LongHap achieves switch and Hamming error rates as low as LongPhase (A & C), while also phasing a larger fraction of sites (B) and achieving longer phase blocks when using methylation information (E). LongHap also phases more SVs with great accuracy (F).
 
 ![figures/performance_pacbio.png](figures/performance_pacbio.png)
 
@@ -306,17 +312,17 @@ LongHap achieves a lower switch error rate than WhatsHap and HapCUT2, but higher
 
 ### Computational requirements
 
-LongHap phases in <35 minutes using a single thread and <10 Gb of memory. The exact requirements depend on sequencing coverage, the number of heterozygous variants, density of structural variants that require local realignment, and density of methylated sites.
+LongHap phases in <35 minutes using a single thread and <10 Gb of memory. The exact requirements depend on sequencing coverage, the number of heterozygous variants, and density of methylated sites.
 Below we provide the run times for phasing chromosome 1 of HG002 using PacBio HiFi, ONT, and UL-ONT data.
 
 | Data type     | Coverage | Read length N50 | LongHap Mode | Time (hh:mm:ss) | Memory (Gb) |
 |---------------|----------|------------------|--------------|-----------------|-------------|
-| PacBio HiFi   | 38x      | 18 kb           | Sequence only | 00:04:18        | 1.2         |
-| PacBio HiFi   | 38x      | 18 kb           | Sequence + Methylation | 00:06:11        | 6.1         |
-| ONT R10.4.1   | 45x      | 29 kb           | Sequence only | 00:15:47        | 1.5         |
-| ONT R10.4.1   | 45x      | 29 kb           | Sequence + Methylation | 00:33:36        | 6.4         |
-| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence only | 00:16:06        | 1.3         |
-| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence + Methylation | 00:17:43        | 7.2         |
+| PacBio HiFi   | 38x      | 18 kb           | Sequence only | 00:07:51        | 1.4         |
+| PacBio HiFi   | 38x      | 18 kb           | Sequence + Methylation | 00:06:16        | 15.8        |
+| ONT R10.4.1   | 45x      | 29 kb           | Sequence only | 00:08:19        | 1.7         |
+| ONT R10.4.1   | 45x      | 29 kb           | Sequence + Methylation | 00:16:16        | 23.5        |
+| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence only | 00:17:01        | 1.4         |
+| UL-ONT R10.4.1| 44x      | 111 kb          | Sequence + Methylation | 00:10:37        | 11.5        |
 
 ### Citation
 
@@ -330,33 +336,3 @@ The idea and initial versions of LongHap were produced entirely by Aaron Pfennig
 
 Aaron Pfennig, apfennig at princeton.edu
 
-
-CHANGES:
-
-Two major changes dominate this merge; the rest are minor fixes
-
-1. Read assignment compared a *summed* log10 likelihood against log10(0.5), a single-site threshold, so no read was ever assigned and the loop exited on its first pass. The same scale error gated site-level state calling, where it also got stricter as coverage grew (unsatisfiable above ~14 reads/haplotype at ml=0.95). Both now use a scale-free likelihood ratio against --llr_thresh, and site states are tri-state (methylated / unmethylated / undetermined), which is what the >= 0 guards in diff_meth always expected. Sites with no calls in a haplotype are no longer  silently treated as unmethylated.
-
-2. Local realignment removed as it systematically inflated the flip error rate. This removes realign_around_variant, get_adaptive_gap_penalties,  is_homopolymer, --flank_snv/--flank_indel and the parasail dependency.
-
-Minor fixes
------------
-* supplementary alignments are now filtered: they double-counted coverage and clobbered read_states, which is keyed by query name
-* CIGAR ops 3 (N), 5 (H) and 6 (P) advanced no offset yet were treated as reference-spanning, so a following indel was stepped over
-* a degenerate insertion alignment (q_after <= qpos) fell through to a confident REF call
-* on LV VCFs write_phased_vcf lacked the split-variant skip that get_heterozygous_variants applies, so output genotypes slipped out of register from the first split site onward
-* mirror_transition wrote through its argument; loopy_belief_propagation passes a view, so building the belief graph rewrote transition_matrix
-* np.all(t) == 0.5 is always False -- two connect_phase_blocks fallbacks were dead; float comparisons against 0.5 now use np.allclose
-* the ONT strand filter divided 0/0 and nan == 0 is False, so variants with no coverage were the ones *not* marked unphaseable; it now also composes with existing unphaseable variants instead of replacing them
-* new_t1 row 1 shared a denominator that multiplied where it should add
-* methylation read assignments recorded phaseable offsets as variant indices, and a state belonging to the wrong variant
-* get_methylation_based_haplotag returned H1 for an unknown read via a vacuous empty-array comparison
-* per-haplotype methylation ratio divided by zero coverage
-* PS is the position of the block's first variant, matching whatshap, HapCUT2 and longphase, instead of a sequential counter from 0
-* --output_* numpy cache paths are normalised to .npz so the reuse check looks where the file is actually written
-* --sample, --llr_thresh, --error_rate, --max_meth_distance and --min_allele_count_meth are reachable from the CLI
-* dropped the tqdm total that walked the whole chromosome a second time
-* removed unused NestedDict and a duplicated edges.append
-* support modkit methylation state calls for ONT data
-
-Adds tests/, a hermetic pytest suite (112 tests, ~13 s) that builds its own reference, VCF and BAM with pysam and needs no external data. The CIGAR walker is checked against pysam.get_aligned_pairs as an independent oracle.

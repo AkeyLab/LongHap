@@ -2262,9 +2262,8 @@ def main(argv=None):
                         help='How many examples of the minor allele must be present in the reads to consider the '
                                 'variant for methylation phasing [2]', type=int, default=2)
     parser.add_argument('--min_base_quality',
-                        help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. '
-                             'For HiFi data, all bases should be consider, that is a minimum quality of 0. '
-                             'For ONT data, a threshold of 10 is recommended [0]', type=int, default=0)
+                        help='Minimum base quality to consider a base for phasing. Only affects SNP phasing. [0]',
+                        type=int, default=0)
     parser.add_argument('--min_mapq', help='Minimum mapping quality to consider a read for phasing [20]',
                         type=int, default=20)
     parser.add_argument('--use_supplementary', action='store_true', default=False,
