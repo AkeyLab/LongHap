@@ -91,8 +91,39 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tar -czf example.tar.gz example/
-          gh release upload "${{ github.event.release.tag_name }}" example.tar.gz --clobber
+          conda activate longhap
+          ./longhap.py \
+            --vcf example/deepvariant.vcf.gz \
+            --bam example/pacbio.bam \
+            --methylation_calls example/methylation.bed \
+            --reference example/toy_reference.fa \
+            --chrom chr1 \
+            --pacbio \
+            -o example/phased_variants_conda_meth.vcf.gz \
+            --verbose
+
+      - name: Upload build artifacts
+        if: github.event_name == 'release'
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: 
+      name: pypi
+      url: https://pypi.org/p/longhap
+    permissions:
+      id-token: write
+    if: github.event_name == 'release'
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
