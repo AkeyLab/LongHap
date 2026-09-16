@@ -29,6 +29,16 @@ longhap --help
 ```
 </details>
 
+<details open>
+<summary>Install with <code>conda</code></summary>
+
+```commandline
+conda install longhap
+longhap --help
+```
+</details>
+
+
 <details>
 <summary>or install with <code>uv</code></summary>
     
